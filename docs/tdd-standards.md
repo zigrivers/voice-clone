@@ -1,7 +1,8 @@
 # Voice Clone - TDD Standards for AI-Assisted Development
 
-**Version**: 1.0
+**Version**: 1.1
 **Created**: February 4, 2026
+**Updated**: February 4, 2026
 **Purpose**: Comprehensive Test-Driven Development standards ensuring rock-solid, bug-free applications when AI writes the code
 
 ---
@@ -365,6 +366,73 @@ class WritingSampleFactory(SQLAlchemyModelFactory):
     content = factory.Faker("text", max_nb_chars=1000)
     word_count = factory.LazyAttribute(lambda o: len(o.content.split()))
     voice_clone = factory.SubFactory(VoiceCloneFactory)
+
+class UserFactory(SQLAlchemyModelFactory):
+    """Factory for creating test User instances."""
+
+    class Meta:
+        model = User
+        sqlalchemy_session = None
+        sqlalchemy_session_persistence = "flush"
+
+    email = factory.Sequence(lambda n: f"user{n}@example.com")
+    name = factory.Faker("name")
+    avatar_url = factory.Faker("image_url")
+    oauth_provider = "google"
+    oauth_id = factory.Sequence(lambda n: f"oauth_{n}")
+    onboarding_completed = False
+
+class UserApiKeyFactory(SQLAlchemyModelFactory):
+    """Factory for creating test UserApiKey instances."""
+
+    class Meta:
+        model = UserApiKey
+        sqlalchemy_session = None
+        sqlalchemy_session_persistence = "flush"
+
+    user = factory.SubFactory(UserFactory)
+    provider = factory.Iterator(["openai", "anthropic"])
+    encrypted_api_key = factory.LazyFunction(
+        lambda: "encrypted_test_key_placeholder"
+    )
+    is_valid = True
+    preferred_for_analysis = False
+    preferred_for_generation = False
+
+class ApiUsageLogFactory(SQLAlchemyModelFactory):
+    """Factory for creating test ApiUsageLog instances."""
+
+    class Meta:
+        model = ApiUsageLog
+        sqlalchemy_session = None
+        sqlalchemy_session_persistence = "flush"
+
+    user = factory.SubFactory(UserFactory)
+    provider = factory.Iterator(["openai", "anthropic"])
+    operation = factory.Iterator(["analysis", "generation", "detection"])
+    model = "gpt-4"
+    input_tokens = factory.Faker("random_int", min=100, max=5000)
+    output_tokens = factory.Faker("random_int", min=50, max=2000)
+    voice_clone_id = None
+
+class ContentTemplateFactory(SQLAlchemyModelFactory):
+    """Factory for creating test ContentTemplate instances."""
+
+    class Meta:
+        model = ContentTemplate
+        sqlalchemy_session = None
+        sqlalchemy_session_persistence = "flush"
+
+    user = factory.SubFactory(UserFactory)
+    name = factory.Sequence(lambda n: f"Template {n}")
+    properties = factory.LazyFunction(lambda: {
+        "platforms": ["linkedin"],
+        "length": "medium",
+        "tone": "professional",
+        "audience": "general",
+        "cta_style": "subtle",
+    })
+    is_default = False
 ```
 
 ### Service Test Pattern (Arrange-Act-Assert)
@@ -680,6 +748,89 @@ export const handlers = [
       { status: 201 }
     );
   }),
+
+  // Auth handlers
+  http.get('/api/auth/session', () => {
+    return HttpResponse.json({
+      user: {
+        id: 'user-1',
+        name: 'Test User',
+        email: 'test@example.com',
+        image: 'https://example.com/avatar.jpg',
+      },
+      expires: new Date(Date.now() + 86400000).toISOString(),
+    });
+  }),
+
+  http.get('/api/auth/providers', () => {
+    return HttpResponse.json({
+      google: { id: 'google', name: 'Google', type: 'oauth' },
+      github: { id: 'github', name: 'GitHub', type: 'oauth' },
+    });
+  }),
+
+  // API Key handlers
+  http.get('/api/v1/settings/api-keys', () => {
+    return HttpResponse.json([
+      { id: '1', provider: 'openai', isValid: true, preferredForAnalysis: true },
+      { id: '2', provider: 'anthropic', isValid: true, preferredForGeneration: true },
+    ]);
+  }),
+
+  http.post('/api/v1/settings/api-keys', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json(
+      { id: 'new-key', provider: body.provider, isValid: true },
+      { status: 201 }
+    );
+  }),
+
+  http.post('/api/v1/settings/api-keys/validate', async ({ request }) => {
+    const body = await request.json();
+    // Simulate validation - keys starting with 'invalid' fail
+    const isValid = !body.apiKey.startsWith('invalid');
+    return HttpResponse.json({ isValid, message: isValid ? 'Valid' : 'Invalid API key' });
+  }),
+
+  // Usage tracking handlers
+  http.get('/api/v1/usage', () => {
+    return HttpResponse.json({
+      currentPeriod: {
+        totalTokens: 125000,
+        estimatedCost: 2.50,
+        byOperation: {
+          analysis: { tokens: 50000, cost: 1.00 },
+          generation: { tokens: 65000, cost: 1.30 },
+          detection: { tokens: 10000, cost: 0.20 },
+        },
+      },
+      warningThreshold: 10.00,
+      isApproachingLimit: false,
+    });
+  }),
+
+  http.get('/api/v1/usage/history', () => {
+    return HttpResponse.json([
+      { month: '2026-01', totalTokens: 100000, estimatedCost: 2.00 },
+      { month: '2025-12', totalTokens: 80000, estimatedCost: 1.60 },
+    ]);
+  }),
+
+  // Content template handlers
+  http.get('/api/v1/content-templates', () => {
+    return HttpResponse.json([
+      { id: '1', name: 'LinkedIn Post', properties: { platforms: ['linkedin'], length: 'medium' } },
+      { id: '2', name: 'Twitter Thread', properties: { platforms: ['twitter'], length: 'short' } },
+    ]);
+  }),
+
+  http.post('/api/v1/content-templates', async ({ request }) => {
+    const body = await request.json();
+    return HttpResponse.json(
+      { id: 'new-template', ...body },
+      { status: 201 }
+    );
+  }),
 ];
 ```
 
@@ -690,6 +841,8 @@ export const handlers = [
 import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SessionProvider } from 'next-auth/react';
+import { Session } from 'next-auth';
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -705,30 +858,50 @@ function createTestQueryClient() {
   });
 }
 
+// Default mock session for authenticated tests
+const defaultSession: Session = {
+  user: {
+    id: 'test-user-id',
+    name: 'Test User',
+    email: 'test@example.com',
+    image: 'https://example.com/avatar.jpg',
+  },
+  expires: new Date(Date.now() + 86400000).toISOString(),
+};
+
 interface WrapperProps {
   children: React.ReactNode;
 }
 
-function AllTheProviders({ children }: WrapperProps) {
-  const queryClient = createTestQueryClient();
+interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
+  session?: Session | null;  // null = unauthenticated, undefined = use default
+}
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
-  );
+function createWrapper(session: Session | null) {
+  return function Wrapper({ children }: WrapperProps) {
+    const queryClient = createTestQueryClient();
+
+    return (
+      <SessionProvider session={session}>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </SessionProvider>
+    );
+  };
 }
 
 function customRender(
   ui: ReactElement,
-  options?: Omit<RenderOptions, 'wrapper'>
+  options: CustomRenderOptions = {}
 ) {
-  return render(ui, { wrapper: AllTheProviders, ...options });
+  const { session = defaultSession, ...renderOptions } = options;
+  return render(ui, { wrapper: createWrapper(session), ...renderOptions });
 }
 
 // Re-export everything
 export * from '@testing-library/react';
-export { customRender as render };
+export { customRender as render, defaultSession };
 ```
 
 ### Component Test Pattern (Test User Behavior)
@@ -883,6 +1056,301 @@ describe('VoiceCloneForm accessibility', () => {
     // Focus should move to first error field
     const nameInput = screen.getByLabelText(/name/i);
     expect(nameInput).toHaveFocus();
+  });
+});
+```
+
+### Testing Authenticated Routes
+
+```typescript
+// tests/pages/protected-page.test.tsx
+import { render, screen, defaultSession } from '../utils/test-utils';
+import { ProtectedPage } from '@/app/(authenticated)/dashboard/page';
+
+describe('ProtectedPage', () => {
+  it('renders content when user is authenticated', () => {
+    // Uses default authenticated session
+    render(<ProtectedPage />);
+
+    expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
+  });
+
+  it('shows loading state while session is loading', () => {
+    // Simulate loading state by not providing session
+    render(<ProtectedPage />, { session: undefined });
+
+    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+  });
+
+  it('redirects to login when user is not authenticated', () => {
+    // Explicitly pass null for unauthenticated state
+    render(<ProtectedPage />, { session: null });
+
+    // Verify redirect behavior or login prompt
+    expect(screen.queryByText(/dashboard/i)).not.toBeInTheDocument();
+  });
+
+  it('displays user information from session', () => {
+    const customSession = {
+      ...defaultSession,
+      user: { ...defaultSession.user, name: 'Custom User' },
+    };
+
+    render(<ProtectedPage />, { session: customSession });
+
+    expect(screen.getByText(/Custom User/i)).toBeInTheDocument();
+  });
+});
+```
+
+### Testing OAuth Flows
+
+```typescript
+// tests/auth/oauth-flow.test.tsx
+import { render, screen, waitFor } from '../utils/test-utils';
+import userEvent from '@testing-library/user-event';
+import { LoginPage } from '@/app/auth/login/page';
+import { signIn } from 'next-auth/react';
+
+// Mock next-auth
+vi.mock('next-auth/react', async () => {
+  const actual = await vi.importActual('next-auth/react');
+  return {
+    ...actual,
+    signIn: vi.fn(),
+  };
+});
+
+describe('OAuth Login Flow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('displays available OAuth providers', () => {
+    render(<LoginPage />, { session: null });
+
+    expect(screen.getByRole('button', { name: /google/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /github/i })).toBeInTheDocument();
+  });
+
+  it('initiates Google OAuth flow when button clicked', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />, { session: null });
+
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    expect(signIn).toHaveBeenCalledWith('google', expect.any(Object));
+  });
+
+  it('shows error message when OAuth fails', async () => {
+    vi.mocked(signIn).mockRejectedValueOnce(new Error('OAuth failed'));
+    const user = userEvent.setup();
+    render(<LoginPage />, { session: null });
+
+    await user.click(screen.getByRole('button', { name: /google/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/failed/i);
+    });
+  });
+});
+```
+
+### Testing Session State Changes
+
+```typescript
+// tests/hooks/use-session.test.tsx
+import { renderHook, waitFor } from '../utils/test-utils';
+import { useSession } from 'next-auth/react';
+import { server } from '../mocks/server';
+import { http, HttpResponse } from 'msw';
+
+describe('useSession hook', () => {
+  it('returns authenticated session', async () => {
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('authenticated');
+    });
+
+    expect(result.current.data?.user?.email).toBe('test@example.com');
+  });
+
+  it('returns unauthenticated when session expires', async () => {
+    server.use(
+      http.get('/api/auth/session', () => {
+        return HttpResponse.json({});
+      })
+    );
+
+    const { result } = renderHook(() => useSession());
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('unauthenticated');
+    });
+  });
+});
+```
+
+### Python: Testing Encryption/Decryption
+
+```python
+# tests/utils/test_encryption.py
+"""Tests for API key encryption utilities."""
+
+import pytest
+from voice_clone.utils.encryption import encrypt_api_key, decrypt_api_key
+
+class TestApiKeyEncryption:
+    """Tests for API key encryption and decryption."""
+
+    def test_encrypt_decrypt_roundtrip(self) -> None:
+        """Encrypted key should decrypt to original value."""
+        original_key = "sk-test-api-key-12345"
+
+        encrypted = encrypt_api_key(original_key)
+        decrypted = decrypt_api_key(encrypted)
+
+        assert decrypted == original_key
+
+    def test_encrypted_key_is_different_from_original(self) -> None:
+        """Encrypted value should not match original."""
+        original_key = "sk-test-api-key-12345"
+
+        encrypted = encrypt_api_key(original_key)
+
+        assert encrypted != original_key
+        assert "sk-test" not in encrypted
+
+    def test_same_key_encrypts_differently_each_time(self) -> None:
+        """Encryption should produce different ciphertext each time (due to IV)."""
+        original_key = "sk-test-api-key-12345"
+
+        encrypted1 = encrypt_api_key(original_key)
+        encrypted2 = encrypt_api_key(original_key)
+
+        assert encrypted1 != encrypted2
+        # But both should decrypt to same value
+        assert decrypt_api_key(encrypted1) == decrypt_api_key(encrypted2)
+
+    def test_decrypt_invalid_ciphertext_raises(self) -> None:
+        """Decrypting invalid data should raise appropriate error."""
+        with pytest.raises(Exception):  # Could be InvalidToken or similar
+            decrypt_api_key("not-a-valid-encrypted-string")
+
+    def test_handles_empty_key(self) -> None:
+        """Should handle empty string appropriately."""
+        # Depending on requirements: raise error or handle gracefully
+        with pytest.raises(ValueError, match="API key cannot be empty"):
+            encrypt_api_key("")
+```
+
+### Python: Testing Authenticated API Routes
+
+```python
+# tests/api/test_authenticated_routes.py
+"""Tests for API routes that require authentication."""
+
+import pytest
+from httpx import AsyncClient
+from fastapi import status
+
+class TestAuthenticatedEndpoints:
+    """Tests for endpoints requiring authentication."""
+
+    async def test_unauthenticated_request_returns_401(
+        self,
+        unauthenticated_client: AsyncClient,
+    ) -> None:
+        """Requests without auth token should return 401."""
+        response = await unauthenticated_client.get("/api/v1/voice-clones")
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    async def test_invalid_token_returns_401(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Requests with invalid token should return 401."""
+        response = await client.get(
+            "/api/v1/voice-clones",
+            headers={"Authorization": "Bearer invalid-token"},
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    async def test_expired_token_returns_401(
+        self,
+        client_with_expired_token: AsyncClient,
+    ) -> None:
+        """Requests with expired token should return 401."""
+        response = await client_with_expired_token.get("/api/v1/voice-clones")
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert "expired" in response.json()["detail"].lower()
+
+    async def test_authenticated_request_succeeds(
+        self,
+        authenticated_client: AsyncClient,
+    ) -> None:
+        """Requests with valid auth should succeed."""
+        response = await authenticated_client.get("/api/v1/voice-clones")
+
+        assert response.status_code == status.HTTP_200_OK
+
+
+# Fixture examples for conftest.py
+@pytest.fixture
+async def authenticated_client(client: AsyncClient, test_user: User) -> AsyncClient:
+    """Client with valid authentication."""
+    token = create_access_token(user_id=test_user.id)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
+
+@pytest.fixture
+async def unauthenticated_client(client: AsyncClient) -> AsyncClient:
+    """Client without authentication."""
+    client.headers.pop("Authorization", None)
+    return client
+```
+
+### Testing Usage Tracking
+
+```typescript
+// tests/hooks/use-usage.test.tsx
+import { renderHook, waitFor } from '../utils/test-utils';
+import { useUsage } from '@/hooks/use-usage';
+import { server } from '../mocks/server';
+import { http, HttpResponse } from 'msw';
+
+describe('useUsage', () => {
+  it('fetches current usage data', async () => {
+    const { result } = renderHook(() => useUsage());
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true);
+    });
+
+    expect(result.current.data?.currentPeriod.totalTokens).toBe(125000);
+    expect(result.current.data?.currentPeriod.estimatedCost).toBe(2.50);
+  });
+
+  it('shows approaching limit warning', async () => {
+    server.use(
+      http.get('/api/v1/usage', () => {
+        return HttpResponse.json({
+          currentPeriod: { totalTokens: 950000, estimatedCost: 9.50 },
+          warningThreshold: 10.00,
+          isApproachingLimit: true,
+        });
+      })
+    );
+
+    const { result } = renderHook(() => useUsage());
+
+    await waitFor(() => {
+      expect(result.current.data?.isApproachingLimit).toBe(true);
+    });
   });
 });
 ```

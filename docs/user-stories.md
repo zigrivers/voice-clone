@@ -137,12 +137,14 @@ Since AI will perform all coding work, each user story includes:
 | Epic ID | Epic Name | Description | Story Count |
 |---------|-----------|-------------|-------------|
 | EP-01 | Voice Clone Methodology Settings | Configure global instructions for voice analysis and content generation | 6 |
-| EP-02 | Voice Clone Generator | Create, manage, and analyze voice clones | 15 |
+| EP-02 | Voice Clone Generator | Create, manage, and analyze voice clones | 16 |
 | EP-03 | Voice Clone Merger | Combine multiple voice clones | 5 |
-| EP-04 | Content Creator | Generate content using voice clones | 12 |
+| EP-04 | Content Creator | Generate content using voice clones | 14 |
 | EP-05 | Content Library | Store and manage generated content | 8 |
 | EP-06 | Platform Output | Format and export content for platforms | 5 |
-| EP-07 | System & Infrastructure | Authentication, settings, and system features | 6 |
+| EP-07 | System & Infrastructure | Authentication, settings, and system features | 11 |
+
+**Total User Stories**: 65
 
 ---
 
@@ -965,6 +967,10 @@ And I have the option to try again or paste content manually
 - Handle paywalled content (return error)
 - Handle redirects (follow up to 5 redirects)
 - Handle rate limiting (respect and report)
+- Handle authentication-required pages (error: "This page requires login. Please copy and paste the content manually.")
+- Handle sites that block scraping/bots (error: "Unable to access this URL. The site may block automated access.")
+- Rate limit requests to same domain (max 1 request per second per domain)
+- Display legal/TOS notice: "Ensure you have rights to use scraped content"
 
 ---
 
@@ -1171,6 +1177,9 @@ And no partial DNA is saved
 - Handle concurrent analysis requests (queue or reject)
 - Handle AI provider rate limiting
 - Handle malformed AI response (retry with different prompt)
+- Handle samples from visibly different time periods (note in DNA: "Voice patterns may have evolved over time - samples span X years")
+- Warn if samples appear to be from multiple authors: "Inconsistent voice patterns detected. Please verify all samples are from the same writer."
+- Handle mixed language samples (note languages detected, warn if analysis may be less accurate)
 
 ---
 
@@ -1398,6 +1407,83 @@ And a placeholder is shown
 **Edge Cases**:
 - Handle invalid image files
 - Handle very large images (resize before upload)
+
+---
+
+#### US-02-016: Compare Voice Clones Side-by-Side
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 4
+
+**User Story**:
+```
+As a content creator,
+I want to compare two voice clones side-by-side,
+So that I can understand their differences before merging or choosing one for content.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Select clones to compare*
+```
+Given I am on the Voice Clones page
+When I select 2 voice clones using checkboxes
+Then I see a "Compare" button appear
+When I click "Compare"
+Then a side-by-side comparison view opens
+```
+
+*Scenario 2: View comparison details*
+```
+Given I am viewing the comparison
+Then I see for each clone:
+  - Name and description
+  - Confidence score with visual indicator
+  - Sample count and total word count
+  - Voice DNA summary (key elements)
+And differences are highlighted with color coding
+```
+
+*Scenario 3: Compare DNA elements*
+```
+Given I am viewing the comparison
+When I expand the "Voice DNA Comparison" section
+Then I see DNA elements side-by-side:
+  - Vocabulary (preferred words, avoided words)
+  - Tone markers (formality level, directness)
+  - Sentence structure (average length, complexity)
+And elements that differ significantly are highlighted
+Example: Clone A formality=3, Clone B formality=8 → highlighted
+```
+
+*Scenario 4: Actions from comparison*
+```
+Given I am viewing the comparison
+Then I see action buttons:
+  - "Merge These Clones" → goes to merge flow with these pre-selected
+  - "Use Clone A for Content" → goes to content creator with Clone A
+  - "Use Clone B for Content" → goes to content creator with Clone B
+```
+
+*Rule-based Criteria*:
+- [ ] Only clones with DNA can be compared meaningfully
+- [ ] Highlight differences with color coding (red/green for variance)
+- [ ] Comparison is read-only
+- [ ] Can only compare exactly 2 clones at a time
+- [ ] Clone without DNA shows warning "Analyze first for full comparison"
+
+**Technical Notes**:
+- API Endpoint: `GET /api/voice-clones/compare?ids=uuid1,uuid2`
+- Returns both clones with computed diff highlights
+- Frontend: Create `VoiceCloneComparison` component
+- Use diff algorithm to identify significant differences
+- Consider threshold for "significant" difference (e.g., >2 points on scales)
+
+**Dependencies**: US-02-012, US-02-003
+
+**Edge Cases**:
+- Handle comparing merged clone with its source clone
+- Handle comparing clone with no DNA to clone with DNA
+- Handle very different DNA structures
 
 ---
 
@@ -1972,6 +2058,9 @@ And my input and configuration are preserved
 - Handle very long input (summarize or chunk)
 - Handle AI provider rate limiting (retry with backoff)
 - Handle concurrent generation requests (queue)
+- Show estimated cost before generation for inputs > 5,000 tokens: "This generation will use approximately X tokens (~$Y)"
+- Warn if input exceeds 5,000 tokens: "Large input detected. Consider breaking into smaller sections for better results."
+- Display token count in real-time as user types input
 
 ---
 
@@ -2352,6 +2441,173 @@ Then the status changes from "draft" to "ready"
 
 **Edge Cases**:
 - Handle save failure (retry, show error)
+
+---
+
+#### US-04-013: Generate Multiple Variations (A/B)
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 4
+
+**User Story**:
+```
+As a content creator,
+I want to generate 3 variations of my content at once,
+So that I can compare and choose the best version.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Enable multiple variations*
+```
+Given I am configuring content generation
+When I see the "Generate" button
+Then I see an option "Generate 3 variations"
+When I enable this option
+Then the button changes to "Generate 3 Variations"
+```
+
+*Scenario 2: View variations*
+```
+Given I have enabled multiple variations
+When I click "Generate 3 Variations"
+Then 3 different versions are generated
+And I see them displayed in a comparison view (tabs or cards)
+And each variation has its own AI detection score
+```
+
+*Scenario 3: Compare and select*
+```
+Given I have 3 variations displayed
+Then I can:
+  - View each variation in full
+  - See AI detection score for each
+  - Click "Use This One" to select a variation
+When I select a variation
+Then it becomes the primary content
+And other variations are discarded (or kept as drafts if I choose)
+```
+
+*Scenario 4: Variations are different*
+```
+Given I generate 3 variations
+Then each variation should be meaningfully different
+And variations may have different:
+  - Opening hooks
+  - Sentence structures
+  - Word choices
+  - CTA approaches
+```
+
+*Rule-based Criteria*:
+- [ ] Default is single generation; variations are opt-in
+- [ ] Always generates exactly 3 variations (not configurable for V1)
+- [ ] Each variation uses the same voice clone and properties
+- [ ] Variations generated in parallel for speed
+- [ ] Each variation saved as draft until one is selected
+- [ ] Total generation time < 45 seconds for all 3
+
+**Technical Notes**:
+- API Endpoint: `POST /api/content/generate` with `variations: 3`
+- Use different temperature or seed for each variation
+- Generate in parallel using asyncio.gather()
+- Frontend: Create `VariationComparison` component with tabs/cards
+- Store all 3 as drafts; mark selected as "ready"
+
+**Dependencies**: US-04-005
+
+**Edge Cases**:
+- Handle one variation failing while others succeed
+- Handle user navigating away mid-generation
+- Handle very similar variations (retry with more diversity)
+
+---
+
+#### US-04-014: Content Templates
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 5
+
+**User Story**:
+```
+As a content creator,
+I want to save and reuse content generation configurations as templates,
+So that I can quickly generate similar content without reconfiguring.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Save as template*
+```
+Given I have configured content properties
+When I click "Save as Template"
+Then I see a dialog asking for template name
+When I enter a name and click "Save"
+Then the current configuration is saved as a template
+And I see a success message
+```
+
+*Scenario 2: Load template*
+```
+Given I am creating content
+When I click "Load Template" dropdown
+Then I see a list of my saved templates
+When I select a template
+Then all content properties are populated from the template
+And the input area remains empty (template doesn't save input)
+```
+
+*Scenario 3: Template includes*
+```
+Given I save a template
+Then it saves:
+  - Selected platforms
+  - Length setting
+  - Tone, formality, humor overrides
+  - Target audience
+  - CTA style
+  - Include/exclude phrases
+And it does NOT save:
+  - Voice clone selection
+  - Input content
+```
+
+*Scenario 4: Manage templates*
+```
+Given I have saved templates
+When I click "Manage Templates" in settings or dropdown
+Then I see a list of all my templates
+And I can: rename, edit, delete, duplicate templates
+```
+
+*Scenario 5: Templates are global*
+```
+Given I have saved a template
+When I select a different voice clone
+Then the template is still available
+Because templates are independent of voice clones
+```
+
+*Rule-based Criteria*:
+- [ ] Templates are global (not tied to specific voice clone)
+- [ ] Template names must be unique
+- [ ] Maximum 50 templates per user
+- [ ] Templates can be updated (overwrite existing)
+- [ ] Default template can be set (auto-loads on page)
+
+**Technical Notes**:
+- Database: New `content_templates` table
+  - id, user_id, name, properties (JSONB), is_default, created_at, updated_at
+- API Endpoint: `GET /api/content-templates`
+- API Endpoint: `POST /api/content-templates`
+- API Endpoint: `PATCH /api/content-templates/{id}`
+- API Endpoint: `DELETE /api/content-templates/{id}`
+- Frontend: Create `TemplateSelector` and `TemplateManager` components
+
+**Dependencies**: US-04-003
+
+**Edge Cases**:
+- Handle template with platforms that have been deleted
+- Handle loading template with invalid/outdated settings
+- Handle duplicate template names
 
 ---
 
@@ -3416,6 +3672,375 @@ And the response includes:
 
 ---
 
+#### US-07-007: OAuth Authentication
+
+**Priority**: P0 | **Points**: 5 | **Sprint**: 1
+
+**User Story**:
+```
+As a user,
+I want to sign in with Google or GitHub,
+So that I can securely access my voice clones without managing another password.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Unauthenticated access*
+```
+Given I visit the application without being authenticated
+When I try to access any protected page
+Then I am redirected to the login page
+And I see "Sign in with Google" and "Sign in with GitHub" buttons
+```
+
+*Scenario 2: OAuth sign in*
+```
+Given I am on the login page
+When I click "Sign in with Google" or "Sign in with GitHub"
+Then I am redirected to the OAuth provider
+When I complete authentication
+Then I am redirected back to the application
+And I see my name/avatar in the navigation
+And I am taken to my originally requested page (or dashboard)
+```
+
+*Scenario 3: Sign out*
+```
+Given I am authenticated
+When I click "Sign out"
+Then my session is ended
+And I am redirected to the login page
+```
+
+*Scenario 4: Session persistence*
+```
+Given I have signed in
+When I close and reopen the browser
+Then I remain signed in (session persists)
+Until my session expires (30 days)
+```
+
+*Rule-based Criteria*:
+- [ ] Support Google OAuth 2.0 provider
+- [ ] Support GitHub OAuth provider
+- [ ] Sessions stored in database (not just cookies)
+- [ ] All API routes except /health and /auth/* are protected
+- [ ] CSRF protection enabled
+- [ ] Session expires after 30 days of inactivity
+
+**Technical Notes**:
+- Use Auth.js (NextAuth.js) for OAuth implementation
+- Configure Google and GitHub OAuth apps
+- Store sessions in PostgreSQL via Auth.js adapter
+- Middleware to protect API routes
+- Frontend: Create `AuthProvider` context and `LoginPage` component
+
+**Dependencies**: None (foundational for deployed application)
+
+**Edge Cases**:
+- Handle OAuth provider errors gracefully
+- Handle user revoking OAuth access
+- Handle email conflicts (same email from different providers)
+
+---
+
+#### US-07-008: Configure AI Provider Settings
+
+**Priority**: P0 | **Points**: 5 | **Sprint**: 1
+
+**User Story**:
+```
+As a content creator,
+I want to configure my AI provider and API key,
+So that I can use my preferred AI service for voice analysis and generation.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View AI provider settings*
+```
+Given I navigate to Settings
+When I click the "AI Provider" tab
+Then I see options for OpenAI and Anthropic
+And I see the current configuration status
+```
+
+*Scenario 2: Configure API key*
+```
+Given I am on the AI Provider settings
+When I select a provider (OpenAI or Anthropic)
+And I enter my API key
+And I click "Validate & Save"
+Then the key is validated against the provider API
+And if valid, the key is encrypted and saved
+And I see a success message "API key saved successfully"
+```
+
+*Scenario 3: Invalid API key*
+```
+Given I enter an invalid API key
+When I click "Validate & Save"
+Then I see an error message explaining why validation failed
+And the key is not saved
+```
+
+*Scenario 4: Environment variable takes precedence*
+```
+Given an API key is set via environment variable
+When I view the AI Provider settings
+Then I see "Using environment variable" displayed
+And the key input is disabled with a note explaining this
+```
+
+*Scenario 5: Separate provider preferences*
+```
+Given I have both OpenAI and Anthropic keys configured
+When I configure provider preferences
+Then I can select which provider to use for:
+  - Voice DNA Analysis (default: OpenAI)
+  - Content Generation (default: OpenAI)
+```
+
+*Rule-based Criteria*:
+- [ ] API keys are encrypted at rest in database
+- [ ] API keys are never exposed to frontend after saving (masked display)
+- [ ] Environment variables take precedence over database values
+- [ ] Validation makes actual API call to verify key works
+- [ ] Support both OpenAI and Anthropic providers
+- [ ] Clear error messages for validation failures
+
+**Technical Notes**:
+- API Endpoint: `GET /api/settings/ai-provider`
+- API Endpoint: `PUT /api/settings/ai-provider`
+- Database: `user_api_keys` table with encrypted `api_key` field
+- Use Fernet encryption for API keys at rest
+- Validate by making minimal API call (e.g., list models)
+- Frontend: Create `AIProviderSettings` component
+
+**Dependencies**: US-07-007 (requires authentication)
+
+**Edge Cases**:
+- Handle key validation timeout
+- Handle provider API outages during validation
+- Handle rotation of encryption keys
+- Handle concurrent key updates
+
+---
+
+#### US-07-009: View AI Usage and Costs
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 2
+
+**User Story**:
+```
+As a content creator,
+I want to see my AI API usage and estimated costs,
+So that I can monitor spending and stay within budget.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View usage summary*
+```
+Given I navigate to Settings
+When I click the "Usage" tab
+Then I see a usage summary showing:
+  - Total tokens used this month
+  - Estimated cost this month
+  - Usage breakdown by operation (analysis vs generation)
+  - Daily usage chart for the month
+```
+
+*Scenario 2: View usage by provider*
+```
+Given I have used multiple AI providers
+When I view the usage page
+Then I see usage and costs broken down by provider
+And each provider shows its own token count and cost estimate
+```
+
+*Scenario 3: Set usage warning threshold*
+```
+Given I am on the usage page
+When I set a monthly cost warning threshold (e.g., $10)
+And I click "Save"
+Then the threshold is saved
+And I see a warning notification when approaching the limit (80%)
+And I see a critical warning when exceeding the limit
+```
+
+*Scenario 4: View usage history*
+```
+Given I want to see historical usage
+When I select a previous month
+Then I see the usage summary for that month
+And I can compare to current month
+```
+
+*Rule-based Criteria*:
+- [ ] Track tokens per API call (input and output)
+- [ ] Calculate costs using current published pricing per provider
+- [ ] Usage resets on the 1st of each month
+- [ ] Historical data retained for 12 months
+- [ ] Warning thresholds are optional
+- [ ] Cost estimates are clearly labeled as estimates
+
+**Technical Notes**:
+- Database: `api_usage_logs` table tracking each API call
+- Store: timestamp, provider, operation, input_tokens, output_tokens, model
+- Calculate cost using pricing table (updated periodically)
+- API Endpoint: `GET /api/settings/usage?month=YYYY-MM`
+- API Endpoint: `PUT /api/settings/usage/threshold`
+- Frontend: Create `UsageTracker` component with charts
+
+**Dependencies**: US-07-008
+
+**Edge Cases**:
+- Handle pricing changes mid-month
+- Handle failed API calls (still track attempted usage)
+- Handle usage from merged/deleted voice clones
+
+---
+
+#### US-07-010: Export Voice Clone Data
+
+**Priority**: P1 | **Points**: 3 | **Sprint**: 5
+
+**User Story**:
+```
+As a content creator,
+I want to export my voice clone data including samples and DNA,
+So that I can back it up or transfer to another instance.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Export single voice clone*
+```
+Given I am viewing a voice clone's detail page
+When I click "Export"
+Then a JSON file downloads
+And the file contains: metadata, all writing samples, current Voice DNA, settings used
+And the filename is "voice-clone-{name}-{date}.json"
+```
+
+*Scenario 2: Bulk export all clones*
+```
+Given I am on the Voice Clones list page
+When I click "Export All"
+Then a single JSON file downloads containing all my voice clones
+And each clone includes its full data as in single export
+```
+
+*Scenario 3: Export file structure*
+```
+Given I have exported a voice clone
+Then the JSON file is human-readable with proper formatting
+And it includes:
+  - export_version: "1.0"
+  - exported_at: timestamp
+  - voice_clone: { full voice clone data }
+  - samples: [ array of all samples with content ]
+  - voice_dna: { current Voice DNA }
+  - settings_snapshot: { methodology settings at export time }
+```
+
+*Rule-based Criteria*:
+- [ ] Export includes all data needed to recreate the clone
+- [ ] Export is human-readable JSON with pretty printing
+- [ ] Include version number for future import compatibility
+- [ ] Samples include full content text
+- [ ] Exclude sensitive data (user IDs, internal IDs become UUIDs)
+
+**Technical Notes**:
+- API Endpoint: `GET /api/voice-clones/{id}/export`
+- API Endpoint: `GET /api/voice-clones/export` (bulk)
+- Return JSON with `Content-Disposition: attachment` header
+- Include schema version for future compatibility
+- Consider import functionality for V2
+
+**Dependencies**: US-02-003
+
+**Edge Cases**:
+- Handle very large exports (many samples)
+- Handle export of merged clones (include merge config)
+- Handle voice clone with no DNA yet
+
+---
+
+#### US-07-011: First-Run Onboarding
+
+**Priority**: P2 | **Points**: 3 | **Sprint**: 6
+
+**User Story**:
+```
+As a new user,
+I want a guided introduction when I first use the app,
+So that I understand how to create my first voice clone.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: First-time user sees onboarding*
+```
+Given I sign in for the first time
+When I am redirected to the dashboard
+Then I see an onboarding modal/wizard
+And the wizard has steps explaining the key features
+```
+
+*Scenario 2: Onboarding flow*
+```
+Given I am viewing the onboarding wizard
+Then I see steps explaining:
+  1. Create a Voice Clone - capture your unique writing style
+  2. Add Writing Samples - the more, the better
+  3. Analyze Your Voice - generate your Voice DNA
+  4. Generate Content - create content in your voice
+And each step has a brief description and visual
+And I can navigate between steps with Previous/Next
+```
+
+*Scenario 3: Dismiss onboarding*
+```
+Given I am viewing the onboarding wizard
+When I click "Skip" or "Get Started"
+Then the wizard closes
+And I am taken to the dashboard
+And the wizard doesn't show again on future logins
+```
+
+*Scenario 4: Re-access onboarding*
+```
+Given I have completed/dismissed onboarding
+When I click "Help" in the navigation
+Then I see an option "View Getting Started Guide"
+When I click it
+Then the onboarding wizard opens again
+```
+
+*Rule-based Criteria*:
+- [ ] Track `onboarding_completed` flag in user profile
+- [ ] Onboarding only shows once automatically
+- [ ] Can be re-accessed from Help menu
+- [ ] Mobile-friendly design
+- [ ] Accessible (keyboard navigable, screen reader compatible)
+
+**Technical Notes**:
+- Database: Add `onboarding_completed` boolean to user table
+- Frontend: Create `OnboardingWizard` component
+- Use modal with step indicators
+- Store completion via `PATCH /api/user/profile`
+- Link "Get Started" to Create Voice Clone page
+
+**Dependencies**: US-07-007, US-07-001
+
+**Edge Cases**:
+- Handle user clearing browser data (check server-side flag)
+- Handle onboarding interruption (resume or restart)
+
+---
+
 ## 5. Story Dependencies Diagram
 
 ```
@@ -3430,13 +4055,16 @@ EP-02: Voice Clone Generator
   US-02-006, US-02-007, US-02-008 → US-02-009 → US-02-010
                                               ↓
   US-01-001 ────────────────────────────────→ US-02-011 → US-02-012 → US-02-013, US-02-014
+                                                        ↓
+  US-02-012, US-02-003 ──────────────────────────────→ US-02-016 (Compare Clones)
 
 EP-03: Voice Clone Merger
   US-02-011 → US-03-001 → US-03-002 → US-03-003 → US-03-004, US-03-005
 
 EP-04: Content Creator
   US-02-011, US-01-004, US-01-006 → US-04-001 → US-04-002 → US-04-003 → US-04-004 → US-04-005
-                                                                                    ↓
+                                                          ↓                         ↓
+                                                US-04-003 → US-04-014 (Templates)   US-04-013 (A/B Variations)
   US-04-006 ← US-04-005 → US-04-007, US-04-008 → US-04-009
   US-04-010 ← US-04-006
   US-04-011, US-04-012 ← US-04-005
@@ -3451,7 +4079,11 @@ EP-06: Platform Output
   US-05-003 → US-06-004
   US-04-004 → US-06-005
 
-EP-07: System & Infrastructure (all independent/foundational)
+EP-07: System & Infrastructure
+  US-07-001, US-07-004, US-07-005, US-07-006 (foundational)
+  US-07-007 (OAuth) → US-07-008 (AI Provider) → US-07-009 (Usage Tracking)
+  US-02-003 → US-07-010 (Export Voice Clone)
+  US-07-007, US-07-001 → US-07-011 (Onboarding)
 ```
 
 ---
@@ -3463,6 +4095,8 @@ EP-07: System & Infrastructure (all independent/foundational)
 - US-07-004: API Error Responses
 - US-07-005: Database Migrations
 - US-07-006: Health Check Endpoint
+- US-07-007: OAuth Authentication *(NEW)*
+- US-07-008: Configure AI Provider Settings *(NEW)*
 - US-02-001: View Voice Clone List
 - US-02-002: Create New Voice Clone
 - US-02-003: View Voice Clone Details
@@ -3476,6 +4110,7 @@ EP-07: System & Infrastructure (all independent/foundational)
 ### Sprint 2: Sample Management & Settings
 - US-07-002: Settings Dashboard
 - US-07-003: Error Handling and Notifications
+- US-07-009: View AI Usage and Costs *(NEW)*
 - US-01-003: View and Revert Instruction History
 - US-01-006: Manage Platform Best Practices
 - US-02-006: Add Writing Sample via Paste
@@ -3498,6 +4133,7 @@ EP-07: System & Infrastructure (all independent/foundational)
 ### Sprint 4: Content Refinement & Merging
 - US-02-013: Edit Voice DNA Manually
 - US-02-014: View and Revert DNA History
+- US-02-016: Compare Voice Clones Side-by-Side *(NEW)*
 - US-03-001: Select Clones to Merge
 - US-03-002: Configure Element Weights
 - US-03-003: Create Merged Voice Clone
@@ -3505,6 +4141,7 @@ EP-07: System & Infrastructure (all independent/foundational)
 - US-04-008: Regenerate Content
 - US-04-009: Regenerate with Feedback
 - US-04-010: Improve Based on Detection Score
+- US-04-013: Generate Multiple Variations A/B *(NEW)*
 - US-06-001: View Platform-Specific Preview
 - US-06-002: Format Twitter Threads
 - US-06-003: Copy with Platform Formatting
@@ -3515,6 +4152,8 @@ EP-07: System & Infrastructure (all independent/foundational)
 - US-03-004: View Merged Clone Sources
 - US-03-005: Regenerate Merged DNA
 - US-02-015: Upload Voice Clone Avatar
+- US-04-014: Content Templates *(NEW)*
+- US-07-010: Export Voice Clone Data *(NEW)*
 - US-05-001: View Content Library
 - US-05-002: Filter Content Library
 - US-05-003: View Content Details
@@ -3526,6 +4165,7 @@ EP-07: System & Infrastructure (all independent/foundational)
 
 ### Sprint 6: Final Features
 - US-05-006: Bulk Actions on Content
+- US-07-011: First-Run Onboarding *(NEW - Optional)*
 
 ---
 
@@ -3549,6 +4189,7 @@ EP-07: System & Infrastructure (all independent/foundational)
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-02-04 | Claude + Ken | Initial user stories document |
+| 1.1 | 2026-02-04 | Claude + Ken | Added 8 new user stories: OAuth Auth (US-07-007), AI Provider Settings (US-07-008), Usage Tracking (US-07-009), Export Data (US-07-010), Onboarding (US-07-011), Clone Comparison (US-02-016), A/B Variations (US-04-013), Content Templates (US-04-014). Added edge cases to US-02-008, US-04-005, US-02-011. Updated sprint planning. Total stories: 57 → 65. |
 
 ---
 
