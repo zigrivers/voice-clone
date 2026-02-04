@@ -114,3 +114,51 @@ For managing multiple parallel sessions:
 ```
 
 See `docs/parallel-sessions-quickref.md` for a complete quick reference.
+
+## Workflow Orchestration
+
+### Plan Mode
+- Enter plan mode for non-trivial tasks (3+ steps or architectural decisions)
+- If something goes wrong, STOP and re-plan—don't keep pushing
+- Write detailed specs upfront to reduce ambiguity
+
+### Subagents
+- Offload research and exploration to subagents to keep main context clean
+- One task per subagent for focused execution
+
+### Verification
+- Never mark a task complete without proving it works
+- Run tests, check logs, demonstrate correctness
+- Ask yourself: "Would a staff engineer approve this?"
+
+### Quality
+- For non-trivial changes: pause to consider "is there a more elegant way?"
+- If a fix feels hacky: rethink the approach
+- Skip this for simple, obvious fixes—don't over-engineer
+
+### Autonomous Bug Fixing
+- When given a bug report: just fix it without asking for hand-holding
+- Point at logs, errors, failing tests → then resolve them
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+Track work in `tasks/` folder (both files are git-tracked for cross-session continuity):
+
+### Planning Workflow
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Get user sign-off before implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Update `tasks/todo.md` with outcomes
+
+### Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md`
+- Write rules that prevent the same mistake
+- Review lessons at session start for relevant patterns
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Minimal code impact.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
