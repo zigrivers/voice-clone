@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from voice_clone.api.health import router as health_router
+from voice_clone.api.router import api_router
 from voice_clone.config import settings
 from voice_clone.exceptions import (
     AppException,
@@ -36,7 +36,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
 
 # Include routers
-app.include_router(health_router)
+app.include_router(api_router)
 
 
 @app.get("/")
