@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: voice-clone-db
+    environment:
+      POSTGRES_USER: voice_clone
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: voice_clone
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice_clone -d voice_clone"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db-test:
+    image: postgres:16-alpine
+    container_name: voice-clone-db-test
+    environment:
+      POSTGRES_USER: voice_clone
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_DB: voice_clone_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-test:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voice_clone -d voice_clone_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  pgdata-test:
