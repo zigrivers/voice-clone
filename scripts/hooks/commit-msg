@@ -1,0 +1,52 @@
+#!/bin/bash
+# Commit-msg hook: Validate conventional commit format
+# Install by running: bash scripts/setup-hooks.sh
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+
+# Extract the first line (subject line)
+first_line=$(echo "$commit_msg" | head -n 1)
+
+# Pattern for conventional commits:
+# type(optional-scope): subject
+# Types: feat, fix, refactor, docs, test, chore, style, perf, build, ci
+pattern="^(feat|fix|refactor|docs|test|chore|style|perf|build|ci)(\([a-zA-Z0-9_-]+\))?: .+"
+
+# Also allow merge commits
+merge_pattern="^Merge "
+
+# Also allow revert commits
+revert_pattern="^Revert "
+
+if [[ "$first_line" =~ $pattern ]] || [[ "$first_line" =~ $merge_pattern ]] || [[ "$first_line" =~ $revert_pattern ]]; then
+    exit 0
+fi
+
+echo "============================================"
+echo "ERROR: Invalid commit message format"
+echo "============================================"
+echo ""
+echo "Your message: $first_line"
+echo ""
+echo "Expected format: type(scope): description"
+echo ""
+echo "Valid types:"
+echo "  feat     - New feature"
+echo "  fix      - Bug fix"
+echo "  refactor - Code restructuring"
+echo "  docs     - Documentation only"
+echo "  test     - Adding/updating tests"
+echo "  chore    - Maintenance tasks"
+echo "  style    - Formatting/whitespace"
+echo "  perf     - Performance improvement"
+echo "  build    - Build system changes"
+echo "  ci       - CI/CD changes"
+echo ""
+echo "Examples:"
+echo "  feat(auth): add login functionality"
+echo "  fix(api): resolve null pointer exception"
+echo "  docs: update README with setup instructions"
+echo ""
+echo "============================================"
+exit 1

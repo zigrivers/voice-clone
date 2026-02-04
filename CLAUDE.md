@@ -79,7 +79,38 @@ Use git worktrees for multiple Claude Code sessions:
 ./scripts/worktree.sh create feat feature-name    # Create worktree
 ./scripts/worktree.sh list                        # List worktrees
 ./scripts/worktree.sh remove feature-name         # Remove after merge
+./scripts/worktree.sh status                      # Show all worktree status
 ./scripts/worktree.sh prune                       # Clean stale references
 ```
 
 Worktrees are created in `../<project>-worktrees/<name>/`. Only parallelize truly independent tasks that don't touch the same files.
+
+### Session Coordination Scripts
+
+For managing multiple parallel sessions:
+```bash
+# Pre-session validation
+./scripts/pre-session-check.sh my-session
+
+# File claim coordination (advisory)
+./scripts/session-registry.sh register my-session "Working on auth"
+./scripts/session-registry.sh claim my-session src/auth/*.ts
+./scripts/session-registry.sh check src/auth/login.ts
+./scripts/session-registry.sh list
+./scripts/session-registry.sh release my-session
+
+# Conflict detection across worktrees
+./scripts/check-conflicts.sh                  # Scan all worktrees
+./scripts/check-conflicts.sh src/file.ts      # Check specific files
+
+# Sync with main (rebase)
+./scripts/sync-worktree.sh                    # Rebase on origin/main
+./scripts/sync-worktree.sh --dry-run          # Preview changes
+
+# Conflict resolution helper
+./scripts/resolve-conflict.sh status          # Check conflict status
+./scripts/resolve-conflict.sh guide           # Step-by-step resolution
+./scripts/resolve-conflict.sh abort           # How to abort
+```
+
+See `docs/parallel-sessions-quickref.md` for a complete quick reference.

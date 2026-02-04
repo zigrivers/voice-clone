@@ -1,0 +1,3 @@
+# This directory holds session coordination files for parallel Claude Code sessions
+# The manifest.json file tracks active sessions and file claims
+# See docs/parallel-sessions-quickref.md for usage details

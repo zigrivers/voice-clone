@@ -10,6 +10,7 @@ This document defines the complete git workflow for the project, including branc
 - [Pull Request Workflow](#pull-request-workflow)
 - [Git Hooks](#git-hooks)
 - [Parallel Development](#parallel-development)
+- [Scaling to 10+ Parallel Sessions](#scaling-to-10-parallel-sessions)
 - [Quick Reference](#quick-reference)
 - [Troubleshooting](#troubleshooting)
 
@@ -310,6 +311,113 @@ Use `scripts/worktree.sh` to manage worktrees:
 
 ---
 
+## Scaling to 10+ Parallel Sessions
+
+When running many parallel Claude Code sessions, additional coordination is needed.
+
+### Session Coordination Tools
+
+The project includes scripts for coordinating multiple sessions:
+
+```bash
+# Pre-session validation
+./scripts/pre-session-check.sh my-session
+
+# Session and file claim registry (advisory warnings)
+./scripts/session-registry.sh register my-session "Working on auth"
+./scripts/session-registry.sh claim my-session src/auth/*.ts
+./scripts/session-registry.sh check src/auth/login.ts
+./scripts/session-registry.sh list
+./scripts/session-registry.sh release my-session
+
+# Conflict detection across all worktrees
+./scripts/check-conflicts.sh                  # Scan all worktrees
+./scripts/check-conflicts.sh src/file.ts      # Check specific files
+
+# Sync worktree with main (rebase)
+./scripts/sync-worktree.sh                    # Rebase on origin/main
+./scripts/sync-worktree.sh --dry-run          # Preview changes
+
+# Conflict resolution helper
+./scripts/resolve-conflict.sh status          # Check conflict status
+./scripts/resolve-conflict.sh guide           # Step-by-step guide
+./scripts/resolve-conflict.sh abort           # How to abort
+```
+
+### 10-Session Workflow
+
+1. **Pre-planning Phase**
+   - Divide work into 10 independent domains
+   - Identify shared files that need coordination
+   - Document file ownership in session registry
+
+2. **Session Startup**
+   ```bash
+   # For each session
+   ./scripts/worktree.sh create feat session-N-feature
+   cd ../voice-clone-worktrees/session-N-feature
+   ./scripts/pre-session-check.sh session-N
+   ./scripts/session-registry.sh claim session-N src/domain/**/*
+   ```
+
+3. **During Work**
+   - Sync with main regularly (see sync schedule below)
+   - Check for conflicts before editing shared files
+   - Commit frequently in small increments
+
+4. **Sync Schedule**
+
+   | Session Duration | Sync Frequency |
+   |-----------------|----------------|
+   | < 1 hour | Before starting only |
+   | 1-4 hours | Every 2 hours |
+   | > 4 hours | Every hour |
+   | Before creating PR | Always |
+
+5. **PR and Cleanup**
+   ```bash
+   # Sync before PR
+   ./scripts/sync-worktree.sh
+
+   # Create and merge PR
+   git push -u origin feat/session-N-feature && \
+   gh pr create --title "..." --body "..." && \
+   gh pr merge --squash --delete-branch
+
+   # Cleanup
+   cd /path/to/voice-clone
+   ./scripts/worktree.sh remove session-N-feature
+   ./scripts/session-registry.sh release session-N
+   ```
+
+### Task Division Strategy
+
+Good division by domain:
+
+| Session | Domain | Files |
+|---------|--------|-------|
+| 1 | Authentication | `src/auth/*` |
+| 2 | User Management | `src/users/*` |
+| 3 | Events | `src/events/*` |
+| 4 | API Layer | `src/api/*` |
+| 5 | Database | `src/db/*` |
+| 6 | Frontend - Pages | `src/pages/*` |
+| 7 | Frontend - Components | `src/components/*` |
+| 8 | Tests - Unit | `tests/unit/*` |
+| 9 | Tests - Integration | `tests/integration/*` |
+| 10 | Documentation | `docs/*` |
+
+Avoid:
+- Multiple sessions editing the same file
+- Sessions that depend on each other's uncommitted work
+- Touching shared utilities without coordination
+
+### Quick Reference
+
+See `docs/parallel-sessions-quickref.md` for a one-page reference.
+
+---
+
 ## Quick Reference
 
 ### Daily Workflow
@@ -429,15 +537,21 @@ bash scripts/setup-hooks.sh
 Two sessions modified the same file.
 
 **Solution**:
-1. This shouldn't happen if tasks are truly independent
-2. If it does, resolve manually in one worktree:
+1. Use the conflict resolution helper:
+   ```bash
+   ./scripts/resolve-conflict.sh status
+   ./scripts/resolve-conflict.sh guide
+   ```
+2. Or resolve manually:
    ```bash
    git fetch origin main
-   git merge origin/main
-   # Resolve conflicts
+   git rebase origin/main
+   # Resolve conflicts in each file
    git add <resolved-files>
-   git commit
+   git rebase --continue
    ```
+
+See `docs/conflict-resolution.md` for detailed resolution procedures.
 
 ---
 
