@@ -44,8 +44,6 @@ feat(scope): description
 
 - Detail 1
 - Detail 2
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 EOF
 )"
 ```
