@@ -11,11 +11,20 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from voice_clone.config import settings
 from voice_clone.models import Base
 
-# Import all models here to ensure they're registered with Base.metadata
-# These will be added as models are created
-# from voice_clone.models.user import User, UserApiKey
-# from voice_clone.models.voice_clone import VoiceClone
-# etc.
+# Import all models to ensure they're registered with Base.metadata
+from voice_clone.models import (  # noqa: F401
+    User,
+    UserApiKey,
+    VoiceClone,
+    VoiceCloneMergeSource,
+    WritingSample,
+    VoiceDnaVersion,
+    Settings,
+    SettingsHistory,
+    PlatformSettings,
+    Content,
+    ApiUsageLog,
+)
 
 # Alembic Config object
 config = context.config
