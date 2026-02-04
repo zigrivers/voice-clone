@@ -58,9 +58,14 @@ A web application that analyzes writing samples to capture a writer's unique "vo
 | Voice DNA analysis | Multi-user / Teams |
 | Voice clone merging | Mobile optimization |
 | Content generation | External AI detection APIs |
-| Platform-specific formatting | |
+| Platform-specific formatting | Voice clone import |
 | Content library | |
 | Custom AI detection heuristics | |
+| OAuth authentication (Google/GitHub) | |
+| AI provider configuration & usage tracking | |
+| Voice clone data export | |
+| Content templates | |
+| A/B content variations | |
 
 ---
 
@@ -1327,7 +1332,7 @@ The architecture uses a **separated frontend/backend** approach with a Python ba
 | **URL Scraping** | httpx, BeautifulSoup, Playwright | Modern async HTTP, HTML parsing |
 | **NLP Analysis** | spaCy, textstat | Text analysis for detection heuristics |
 | **File Storage** | Local filesystem (dev), S3/R2 (prod) | Flexibility |
-| **Authentication** | (V2) Auth.js or similar | For future multi-user |
+| **Authentication** | Auth.js (NextAuth.js) | OAuth with Google/GitHub providers |
 
 ### 5.3 AI Provider Abstraction
 
@@ -1642,6 +1647,64 @@ class SettingsHistory(Base):
     platform: Mapped[Optional[Platform]] = mapped_column(Enum(Platform), nullable=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class User(Base):
+    """User account (via OAuth)."""
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    oauth_provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'google' or 'github'
+    oauth_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
+
+
+class UserApiKey(Base):
+    """User's AI provider API keys (encrypted)."""
+    __tablename__ = "user_api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'openai' or 'anthropic'
+    encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)  # Fernet encrypted
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    preferred_for_analysis: Mapped[bool] = mapped_column(Boolean, default=False)
+    preferred_for_generation: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
+
+
+class ApiUsageLog(Base):
+    """Track API usage for cost monitoring."""
+    __tablename__ = "api_usage_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    operation: Mapped[str] = mapped_column(String(50), nullable=False)  # 'analysis' or 'generation'
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    voice_clone_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ContentTemplate(Base):
+    """Saved content generation configurations."""
+    __tablename__ = "content_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False)  # platforms, length, tone, etc.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
 ```
 
 ---
@@ -1941,6 +2004,7 @@ The full default content for Voice Cloning Instructions, Anti-AI Guidelines, and
 |---------|------|--------|---------|
 | 1.0 | 2026-02-04 | Ken + Claude | Initial PRD |
 | 1.1 | 2026-02-04 | Ken + Claude | Updated tech stack: Python/FastAPI backend, SQLAlchemy ORM, separated frontend/backend architecture. Added tech-stack.md reference. |
+| 1.2 | 2026-02-04 | Ken + Claude | Added OAuth authentication (Auth.js). Added new data models: User, UserApiKey, ApiUsageLog, ContentTemplate. Updated to support 65 user stories. |
 
 ---
 

@@ -1,7 +1,8 @@
 # Voice Clone - Project Structure Guide
 
-**Version**: 1.0
+**Version**: 1.1
 **Created**: February 4, 2026
+**Updated**: February 4, 2026
 **Purpose**: Comprehensive guide to project organization optimized for AI-assisted development
 
 ---
@@ -138,33 +139,41 @@ backend/
 │       ├── api/                # HTTP layer - routes only
 │       │   ├── __init__.py
 │       │   ├── router.py       # Main router that includes all subrouters
+│       │   ├── auth.py         # /api/v1/auth/* endpoints (OAuth callbacks)
 │       │   ├── voice_clones.py # /api/v1/voice-clones/* endpoints
 │       │   ├── content.py      # /api/v1/content/* endpoints
 │       │   ├── library.py      # /api/v1/library/* endpoints
-│       │   └── settings.py     # /api/v1/settings/* endpoints
+│       │   ├── settings.py     # /api/v1/settings/* endpoints
+│       │   └── usage.py        # /api/v1/usage/* endpoints
 │       │
 │       ├── models/             # SQLAlchemy ORM models
 │       │   ├── __init__.py     # Export all models
 │       │   ├── base.py         # Base model class, common fields
+│       │   ├── user.py         # User, UserApiKey models
 │       │   ├── voice_clone.py  # VoiceClone model
 │       │   ├── writing_sample.py
 │       │   ├── voice_dna.py    # VoiceDnaVersion model
-│       │   ├── content.py      # Content model
-│       │   └── settings.py     # Settings, PlatformSettings models
+│       │   ├── content.py      # Content, ContentTemplate models
+│       │   ├── settings.py     # Settings, PlatformSettings models
+│       │   └── usage.py        # ApiUsageLog model
 │       │
 │       ├── schemas/            # Pydantic schemas for API
 │       │   ├── __init__.py
+│       │   ├── user.py         # UserResponse, ApiKeyCreate, etc.
 │       │   ├── voice_clone.py  # VoiceCloneCreate, VoiceCloneResponse, etc.
-│       │   ├── content.py      # ContentCreate, ContentResponse, etc.
-│       │   └── settings.py     # SettingsUpdate, etc.
+│       │   ├── content.py      # ContentCreate, ContentResponse, TemplateCreate, etc.
+│       │   ├── settings.py     # SettingsUpdate, etc.
+│       │   └── usage.py        # UsageSummary, UsageLog, etc.
 │       │
 │       ├── services/           # Business logic layer
 │       │   ├── __init__.py
+│       │   ├── user.py         # UserService - user and API key management
 │       │   ├── voice_clone.py  # VoiceCloneService class
 │       │   ├── analysis.py     # AnalysisService - DNA extraction
 │       │   ├── generation.py   # GenerationService - content creation
 │       │   ├── detection.py    # DetectionService - AI scoring
-│       │   └── merge.py        # MergeService - voice clone merging
+│       │   ├── merge.py        # MergeService - voice clone merging
+│       │   └── usage.py        # UsageService - API usage tracking
 │       │
 │       ├── ai/                 # AI provider integration
 │       │   ├── __init__.py     # get_ai_provider factory function
@@ -185,7 +194,8 @@ backend/
 │       │
 │       └── utils/              # Shared utilities
 │           ├── __init__.py
-│           └── text.py         # Text processing helpers
+│           ├── text.py         # Text processing helpers
+│           └── encryption.py   # Fernet encryption for API keys
 │
 └── tests/                      # Test files mirror src/ structure
     ├── __init__.py
@@ -346,6 +356,17 @@ frontend/
     │   ├── error.tsx           # Global error boundary
     │   ├── not-found.tsx       # 404 page
     │   │
+    │   ├── api/                # API routes (Next.js)
+    │   │   └── auth/
+    │   │       └── [...nextauth]/
+    │   │           └── route.ts  # Auth.js route handler
+    │   │
+    │   ├── auth/               # /auth routes
+    │   │   ├── signin/
+    │   │   │   └── page.tsx    # OAuth sign-in page
+    │   │   └── signout/
+    │   │       └── page.tsx    # Sign-out confirmation
+    │   │
     │   ├── voice-clones/       # /voice-clones routes
     │   │   ├── page.tsx        # Voice clones list
     │   │   ├── [id]/           # /voice-clones/[id]
@@ -362,7 +383,11 @@ frontend/
     │   │   └── page.tsx
     │   │
     │   └── settings/           # /settings
-    │       └── page.tsx
+    │       ├── page.tsx        # Settings overview
+    │       ├── ai-provider/
+    │       │   └── page.tsx    # AI provider configuration
+    │       └── usage/
+    │           └── page.tsx    # Usage tracking dashboard
     │
     ├── components/             # React components
     │   ├── ui/                 # shadcn/ui base components
@@ -372,9 +397,16 @@ frontend/
     │   │   ├── input.tsx
     │   │   └── ...
     │   │
+    │   ├── auth/               # Authentication components
+    │   │   ├── auth-provider.tsx     # Session provider wrapper
+    │   │   ├── sign-in-button.tsx    # OAuth sign-in buttons
+    │   │   ├── sign-out-button.tsx
+    │   │   └── user-menu.tsx         # User avatar/dropdown
+    │   │
     │   ├── voice-clone/        # Voice clone feature components
     │   │   ├── voice-clone-card.tsx
     │   │   ├── voice-clone-form.tsx
+    │   │   ├── voice-clone-comparison.tsx  # Side-by-side comparison
     │   │   ├── sample-uploader.tsx
     │   │   ├── dna-viewer.tsx
     │   │   └── confidence-badge.tsx
@@ -383,12 +415,18 @@ frontend/
     │   │   ├── content-editor.tsx
     │   │   ├── platform-selector.tsx
     │   │   ├── properties-panel.tsx
-    │   │   └── detection-score.tsx
+    │   │   ├── detection-score.tsx
+    │   │   ├── variation-comparison.tsx    # A/B variations view
+    │   │   └── template-selector.tsx       # Content templates
     │   │
     │   ├── library/            # Library components
     │   │   ├── content-table.tsx
     │   │   ├── content-filters.tsx
     │   │   └── content-preview.tsx
+    │   │
+    │   ├── settings/           # Settings components
+    │   │   ├── ai-provider-settings.tsx
+    │   │   └── usage-dashboard.tsx
     │   │
     │   └── layout/             # Layout components
     │       ├── header.tsx
@@ -397,13 +435,17 @@ frontend/
     │
     ├── lib/                    # Utilities and configuration
     │   ├── api.ts              # API client (axios instance)
+    │   ├── auth.ts             # Auth.js configuration
     │   ├── utils.ts            # General utilities (cn, formatDate, etc.)
     │   └── validations.ts      # Zod schemas for form validation
     │
     ├── hooks/                  # Custom React hooks
+    │   ├── use-session.ts      # Auth session hook wrapper
     │   ├── use-voice-clones.ts # TanStack Query hooks for voice clones
     │   ├── use-content.ts
+    │   ├── use-templates.ts    # Content templates hooks
     │   ├── use-settings.ts
+    │   ├── use-usage.ts        # API usage tracking hooks
     │   └── use-debounce.ts
     │
     ├── stores/                 # Zustand state stores
@@ -411,8 +453,10 @@ frontend/
     │
     └── types/                  # TypeScript type definitions
         ├── index.ts            # Re-export all types
+        ├── auth.ts             # User, Session types
         ├── voice-clone.ts      # VoiceClone, WritingSample types
-        ├── content.ts          # Content, Platform types
+        ├── content.ts          # Content, Platform, Template types
+        ├── usage.ts            # UsageSummary, UsageLog types
         └── api.ts              # API response types
 ```
 
@@ -520,6 +564,7 @@ export const useAppStore = create<AppState>((set) => ({
 
 | State Type | Solution |
 |------------|----------|
+| Auth state | Auth.js (NextAuth) |
 | Server data | TanStack Query |
 | UI state | Zustand |
 | Form state | React Hook Form |
@@ -537,10 +582,20 @@ export const useAppStore = create<AppState>((set) => ({
 # Database
 DATABASE_URL=postgresql+asyncpg://voice_clone:localdev@localhost:5432/voice_clone
 
-# AI Providers
+# AI Providers (optional - users can also configure via UI)
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 DEFAULT_AI_PROVIDER=anthropic
+
+# Security
+ENCRYPTION_KEY=your-fernet-encryption-key-here  # For encrypting user API keys
+
+# OAuth (Auth.js)
+AUTH_SECRET=your-nextauth-secret-here
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
 
 # Frontend
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
@@ -971,7 +1026,10 @@ src/components/voice-clone/voice-clone-form.tsx
 | Business logic | `services/feature.py` | - |
 | AI integration | `ai/` | - |
 | File parser | `parsers/` | - |
+| Encryption utility | `utils/encryption.py` | - |
+| Auth-related logic | `services/user.py` | `lib/auth.ts` |
 | React component | - | `components/feature/` |
+| Auth component | - | `components/auth/` |
 | Page/route | - | `app/feature/page.tsx` |
 | API hook | - | `hooks/use-feature.ts` |
 | UI state | - | `stores/app-store.ts` |
@@ -998,6 +1056,15 @@ npm run lint                    # Lint check
 docker compose up -d            # Start PostgreSQL
 docker compose down             # Stop PostgreSQL
 ```
+
+---
+
+## Document History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2026-02-04 | Ken + Claude | Initial project structure document |
+| 1.1 | 2026-02-04 | Ken + Claude | Added auth routes/components (Auth.js), new models (user.py, usage.py), services (user.py, usage.py), encryption utility, content templates, settings pages for AI provider and usage tracking. Updated environment variables for OAuth. |
 
 ---
 

@@ -1,7 +1,8 @@
 # Voice Clone Tool - Tech Stack Document
 
-**Version**: 1.0
+**Version**: 1.1
 **Created**: February 4, 2026
+**Updated**: February 4, 2026
 **Purpose**: Define a technology stack optimized for AI-assisted development and long-term maintainability
 
 ---
@@ -221,6 +222,9 @@ dependencies = [
     # Utilities
     "python-dotenv>=1.0.0",
     "structlog>=24.1.0",  # Structured logging
+
+    # Security
+    "cryptography>=42.0.0",  # Fernet encryption for API keys
 ]
 
 [project.optional-dependencies]
@@ -261,11 +265,13 @@ backend/
 │       ├── models/
 │       │   ├── __init__.py
 │       │   ├── base.py             # SQLAlchemy base
+│       │   ├── user.py             # User, UserApiKey models
 │       │   ├── voice_clone.py      # VoiceClone model
 │       │   ├── writing_sample.py   # WritingSample model
 │       │   ├── voice_dna.py        # VoiceDNA model
-│       │   ├── content.py          # Content model
-│       │   └── settings.py         # Settings models
+│       │   ├── content.py          # Content, ContentTemplate models
+│       │   ├── settings.py         # Settings models
+│       │   └── usage.py            # ApiUsageLog model
 │       │
 │       ├── schemas/
 │       │   ├── __init__.py
@@ -330,6 +336,8 @@ backend/
     "next": "^14.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "next-auth": "^5.0.0",
+    "@auth/core": "^0.28.0",
     "@tanstack/react-query": "^5.17.0",
     "zustand": "^4.5.0",
     "axios": "^1.6.0",
@@ -339,7 +347,8 @@ backend/
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "tailwind-merge": "^2.2.0",
-    "lucide-react": "^0.309.0"
+    "lucide-react": "^0.309.0",
+    "recharts": "^2.12.0"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
@@ -364,23 +373,34 @@ frontend/
 │   ├── app/
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
+│   │   ├── auth/
+│   │   │   ├── signin/page.tsx    # OAuth sign-in page
+│   │   │   └── signout/page.tsx
+│   │   ├── api/
+│   │   │   └── auth/[...nextauth]/route.ts  # Auth.js route handler
 │   │   ├── voice-clones/
 │   │   ├── create/
 │   │   ├── library/
 │   │   └── settings/
 │   ├── components/
 │   │   ├── ui/                    # shadcn/ui components
+│   │   ├── auth/
+│   │   │   ├── auth-provider.tsx  # Session provider wrapper
+│   │   │   ├── sign-in-button.tsx
+│   │   │   └── user-menu.tsx
 │   │   ├── voice-clone/
 │   │   ├── content/
 │   │   └── library/
 │   ├── lib/
 │   │   ├── api.ts                 # API client
+│   │   ├── auth.ts                # Auth.js configuration
 │   │   ├── utils.ts
 │   │   └── validations.ts
 │   ├── hooks/
 │   │   ├── use-voice-clones.ts
 │   │   ├── use-content.ts
-│   │   └── use-settings.ts
+│   │   ├── use-settings.ts
+│   │   └── use-session.ts         # Auth session hook
 │   ├── stores/
 │   │   └── app-store.ts
 │   └── types/
@@ -392,6 +412,7 @@ frontend/
 
 | State Type | Solution | Rationale |
 |------------|----------|-----------|
+| **Auth State** | Auth.js (NextAuth) | OAuth flow, session management, protected routes |
 | **Server State** | TanStack Query | Handles caching, refetching, optimistic updates |
 | **UI State** | Zustand | Simple, explicit, minimal boilerplate |
 | **Form State** | React Hook Form + Zod | Type-safe validation |
@@ -469,6 +490,81 @@ class VoiceClone(Base):
         back_populates="voice_clone",
         cascade="all, delete-orphan"
     )
+
+
+# models/user.py
+class User(Base):
+    """User account authenticated via OAuth."""
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    oauth_provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'google' or 'github'
+    oauth_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
+
+    # Relationships
+    api_keys: Mapped[List["UserApiKey"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    usage_logs: Mapped[List["ApiUsageLog"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class UserApiKey(Base):
+    """User's AI provider API keys (encrypted at rest)."""
+
+    __tablename__ = "user_api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'openai' or 'anthropic'
+    encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    is_valid: Mapped[bool] = mapped_column(Boolean, default=True)
+    preferred_for_analysis: Mapped[bool] = mapped_column(Boolean, default=False)
+    preferred_for_generation: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="api_keys")
+
+
+# models/usage.py
+class ApiUsageLog(Base):
+    """Track API usage for cost monitoring."""
+
+    __tablename__ = "api_usage_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    operation: Mapped[str] = mapped_column(String(50), nullable=False)  # 'analysis' or 'generation'
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
+    voice_clone_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship(back_populates="usage_logs")
+
+
+# models/content.py (addition to existing Content model)
+class ContentTemplate(Base):
+    """Saved content generation configurations."""
+
+    __tablename__ = "content_templates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, onupdate=datetime.utcnow)
 ```
 
 ### Database Service Pattern
@@ -1001,7 +1097,7 @@ async def client(db_session):
 
 ## 10. Security Considerations
 
-### API Key Management
+### Application Settings
 
 ```python
 # config.py
@@ -1014,7 +1110,7 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
-    # AI Providers (secrets)
+    # AI Providers (environment variable fallbacks)
     openai_api_key: Optional[str] = None
     anthropic_api_key: Optional[str] = None
 
@@ -1030,6 +1126,14 @@ class Settings(BaseSettings):
 
     # Security
     cors_origins: list[str] = ["http://localhost:3000"]
+    encryption_key: str  # Fernet key for encrypting user API keys
+
+    # OAuth (Auth.js)
+    auth_secret: str  # NextAuth secret
+    google_client_id: Optional[str] = None
+    google_client_secret: Optional[str] = None
+    github_client_id: Optional[str] = None
+    github_client_secret: Optional[str] = None
 
     class Config:
         env_file = ".env"
@@ -1037,6 +1141,51 @@ class Settings(BaseSettings):
 
 settings = Settings()
 ```
+
+### User API Key Encryption
+
+User-provided API keys are encrypted at rest using Fernet symmetric encryption:
+
+```python
+# utils/encryption.py
+from cryptography.fernet import Fernet
+from voice_clone.config import settings
+
+def get_fernet() -> Fernet:
+    """Get Fernet instance for encryption/decryption."""
+    return Fernet(settings.encryption_key.encode())
+
+def encrypt_api_key(api_key: str) -> str:
+    """Encrypt an API key for storage.
+
+    Args:
+        api_key: The plaintext API key
+
+    Returns:
+        Base64-encoded encrypted key
+    """
+    fernet = get_fernet()
+    return fernet.encrypt(api_key.encode()).decode()
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key for use.
+
+    Args:
+        encrypted_key: The encrypted API key from database
+
+    Returns:
+        Plaintext API key
+    """
+    fernet = get_fernet()
+    return fernet.decrypt(encrypted_key.encode()).decode()
+```
+
+**Key Security Practices:**
+- API keys are never logged or exposed in error messages
+- Encrypted keys are stored, never plaintext
+- Environment variable keys take precedence over user-stored keys
+- Keys are decrypted only when needed for API calls
+- Frontend never receives actual API keys after initial save (masked display)
 
 ### Input Validation
 
@@ -1266,5 +1415,16 @@ This tech stack prioritizes:
 3. **Strong typing** throughout (Python type hints, TypeScript)
 4. **Modular architecture** that AI can understand and modify
 5. **Well-documented libraries** with extensive training data coverage
+6. **Secure authentication** via OAuth (Google/GitHub) with Auth.js
+7. **Encrypted secrets** using Fernet for user-stored API keys
 
 The separation of frontend and backend, combined with clear service boundaries and explicit dependencies, creates a codebase that AI can maintain and extend reliably.
+
+---
+
+## Document History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | 2026-02-04 | Ken + Claude | Initial tech stack document |
+| 1.1 | 2026-02-04 | Ken + Claude | Added Auth.js/NextAuth for OAuth authentication. Added new models: User, UserApiKey, ApiUsageLog, ContentTemplate. Added Fernet encryption for API keys. Updated frontend/backend project structures. |
