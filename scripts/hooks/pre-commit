@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-commit hook: Block commits to main/master branches
+# Install by running: bash scripts/setup-hooks.sh
+
+# Get the current branch name
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Check if on main or master
+if [ "$branch" = "main" ] || [ "$branch" = "master" ]; then
+    echo "============================================"
+    echo "ERROR: Cannot commit directly to $branch"
+    echo "============================================"
+    echo ""
+    echo "Create a feature branch first:"
+    echo ""
+    echo "  git checkout -b feat/your-feature-name"
+    echo ""
+    echo "Branch prefixes: feat/, fix/, refactor/, docs/,"
+    echo "                 test/, chore/, style/, perf/,"
+    echo "                 build/, ci/"
+    echo ""
+    echo "Then commit your changes on the feature branch."
+    echo "============================================"
+    exit 1
+fi
+
+exit 0

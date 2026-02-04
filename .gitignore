@@ -40,3 +40,6 @@ next-env.d.ts
 
 # Misc
 .history/
+
+# Session coordination (runtime data)
+.sessions/manifest.json
