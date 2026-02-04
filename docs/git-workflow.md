@@ -330,8 +330,6 @@ feat(service): add my feature
 - Implement core functionality for X
 - Add validation for edge cases
 - Update related configuration
-
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
 EOF
 )"
 
