@@ -1,7 +1,8 @@
 # Voice Clone Tool - User Stories Document
 
-**Version**: 1.0
+**Version**: 1.2
 **Created**: February 4, 2026
+**Last Updated**: February 4, 2026
 **Purpose**: Comprehensive user stories for AI-assisted development
 **Related Documents**: [plan.md](./plan.md), [tech-stack.md](./tech-stack.md)
 
@@ -137,14 +138,14 @@ Since AI will perform all coding work, each user story includes:
 | Epic ID | Epic Name | Description | Story Count |
 |---------|-----------|-------------|-------------|
 | EP-01 | Voice Clone Methodology Settings | Configure global instructions for voice analysis and content generation | 6 |
-| EP-02 | Voice Clone Generator | Create, manage, and analyze voice clones | 16 |
+| EP-02 | Voice Clone Generator | Create, manage, and analyze voice clones | 19 |
 | EP-03 | Voice Clone Merger | Combine multiple voice clones | 5 |
-| EP-04 | Content Creator | Generate content using voice clones | 14 |
-| EP-05 | Content Library | Store and manage generated content | 8 |
+| EP-04 | Content Creator | Generate content using voice clones | 15 |
+| EP-05 | Content Library | Store and manage generated content | 9 |
 | EP-06 | Platform Output | Format and export content for platforms | 5 |
-| EP-07 | System & Infrastructure | Authentication, settings, and system features | 11 |
+| EP-07 | System & Infrastructure | Authentication, settings, and system features | 17 |
 
-**Total User Stories**: 65
+**Total User Stories**: 76
 
 ---
 
@@ -1097,6 +1098,9 @@ Then I see a breakdown:
 - Store `confidence_score` on `VoiceClone` model
 - Recalculate on sample CRUD operations
 - Consistency score requires DNA analysis (use placeholder until analyzed)
+- **Integration**: Confidence score feeds into Health Score calculation (US-02-017)
+- Health Score = f(confidence, freshness, sample changes)
+- Recalculation triggers health score update
 
 **Dependencies**: US-02-006, US-02-007, US-02-008, US-02-009
 
@@ -1170,6 +1174,10 @@ And no partial DNA is saved
 - Parse AI response as JSON into VoiceDNA structure
 - Store in `VoiceDnaVersion` with trigger='initial' or 'regenerate'
 - Update `VoiceClone.current_dna_id`
+- **Integration**: Updates Health Score on completion (US-02-017)
+- **Integration**: Triggers Sample Impact Analysis calculation (async, background) (US-02-018)
+- **Integration**: Shows in background jobs status panel (US-07-015)
+- Reset `samples_added_since_analysis` counter on completion
 
 **Dependencies**: US-01-001, US-02-009
 
@@ -1484,6 +1492,224 @@ Then I see action buttons:
 - Handle comparing merged clone with its source clone
 - Handle comparing clone with no DNA to clone with DNA
 - Handle very different DNA structures
+
+---
+
+#### US-02-017: View Voice Clone Health Score
+
+**Priority**: P1 | **Points**: 3 | **Sprint**: 4
+
+**User Story**:
+```
+As a content creator,
+I want to see a "health score" for my voice clone that includes freshness indicators,
+So that I know when my DNA might need re-analysis.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View health score*
+```
+Given I am viewing a voice clone's detail page
+When I look at the health indicators section
+Then I see:
+  - Health score (1-100) with color indicator
+  - Last DNA analysis date
+  - Samples added since last analysis count
+  - Recommendation status (if action needed)
+```
+
+*Scenario 2: Health score interpretation*
+```
+Given my voice clone has a health score
+Then I see an interpretation:
+  - 80-100: "Healthy - DNA is current" (green)
+  - 60-79: "Attention needed - consider re-analysis" (yellow)
+  - 40-59: "Stale - re-analysis recommended" (orange)
+  - 0-39: "Outdated - re-analysis required" (red)
+```
+
+*Scenario 3: Re-analysis recommendation*
+```
+Given my voice clone's DNA was analyzed 30+ days ago
+Or more than 3 samples have been added since analysis
+When I view the health score
+Then I see a recommendation "Re-analyze your voice clone for best results"
+And I see a "Re-analyze Now" button
+```
+
+*Scenario 4: Fresh clone*
+```
+Given my voice clone was analyzed today
+And no new samples have been added
+When I view the health score
+Then I see "Healthy" status
+And no re-analysis recommendation
+```
+
+*Rule-based Criteria*:
+- [ ] Health score = f(confidence_score, days_since_analysis, samples_since_analysis)
+- [ ] Score decreases over time and with new samples
+- [ ] Re-analysis button triggers US-02-011 flow
+- [ ] Health score displayed on clone list view (small indicator)
+
+**Technical Notes**:
+- Calculate health score: `health = confidence_score * freshness_factor * sample_currency_factor`
+- `freshness_factor`: 1.0 at day 0, decreases by 0.01 per day, min 0.5
+- `sample_currency_factor`: 1.0 if 0 new samples, -0.05 per new sample, min 0.6
+- Store `last_analysis_at` and `samples_added_since_analysis` on VoiceClone model
+- Frontend: Create `HealthScoreIndicator` component
+
+**Dependencies**: US-02-011, US-02-010
+
+**Edge Cases**:
+- Handle clone that has never been analyzed (health = 0, prompt to analyze)
+- Handle clone with deleted samples (recalculate on sample deletion)
+
+---
+
+#### US-02-018: View Sample Impact Analysis
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 5
+
+**User Story**:
+```
+As a content creator,
+I want to see which writing samples had the biggest impact on my Voice DNA,
+So that I can understand what makes my voice unique and add similar samples.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View impact analysis*
+```
+Given my voice clone has been analyzed
+When I navigate to the "Sample Impact" tab on the clone detail page
+Then I see a ranked list of samples by impact
+And each sample shows:
+  - Sample title/snippet
+  - Impact score (1-100)
+  - Top 3 patterns extracted from this sample
+  - Impact category (vocabulary, tone, structure, etc.)
+```
+
+*Scenario 2: View sample details*
+```
+Given I am viewing the impact analysis
+When I click on a sample
+Then I see detailed impact breakdown:
+  - Specific phrases added to DNA
+  - Tone markers influenced
+  - Sentence patterns detected
+  - Unique contributions (what this sample added that others didn't)
+```
+
+*Scenario 3: No analysis yet*
+```
+Given my voice clone has not been analyzed
+When I navigate to the Sample Impact tab
+Then I see a message "Analyze your voice clone first to see sample impact"
+And I see an "Analyze Now" button
+```
+
+*Scenario 4: Recommendations*
+```
+Given I view the impact analysis
+Then I see recommendations:
+  - "Your top impactful samples are [X, Y, Z]"
+  - "Consider adding more [content type] samples" (if gap detected)
+  - "Sample [A] has low impact - consider removing or replacing"
+```
+
+*Rule-based Criteria*:
+- [ ] Impact analysis runs automatically after DNA analysis
+- [ ] Impact calculated by comparing DNA with/without each sample
+- [ ] Shows top 5 most impactful samples prominently
+- [ ] Low-impact samples (<20%) flagged for potential removal
+
+**Technical Notes**:
+- Impact analysis runs as background job after DNA analysis completes
+- Store results in `sample_impact_analysis` JSONB field on VoiceDnaVersion
+- Algorithm: For each sample, measure DNA element deviation when excluded
+- Frontend: Create `SampleImpactAnalysis` component with visual bars
+- Consider caching results since recalculation is expensive
+
+**Dependencies**: US-02-011, US-02-012
+
+**Edge Cases**:
+- Handle single sample (100% impact by definition)
+- Handle very similar samples (may show as low-impact)
+- Handle analysis with very few samples (warn about limited accuracy)
+
+---
+
+#### US-02-019: Detect Duplicate Samples
+
+**Priority**: P2 | **Points**: 3 | **Sprint**: 5
+
+**User Story**:
+```
+As a content creator,
+I want the system to warn me if I try to add a sample that's very similar to an existing one,
+So that I don't waste time on redundant samples.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Duplicate detected*
+```
+Given I have existing samples in my voice clone
+When I add a new sample that is 85%+ similar to an existing sample
+Then I see a warning: "This content is very similar to [existing sample name]"
+And I see the existing sample highlighted
+And I have options: "Add Anyway" or "Cancel"
+```
+
+*Scenario 2: Near-duplicate detected*
+```
+Given I add a sample that is 70-84% similar to an existing sample
+When the similarity check completes
+Then I see an info message: "This content may overlap with [existing sample name]"
+And I can proceed without additional confirmation
+```
+
+*Scenario 3: Unique sample*
+```
+Given I add a sample that is <70% similar to any existing sample
+When the similarity check completes
+Then no warning is shown
+And the sample is added normally
+```
+
+*Scenario 4: Similarity details*
+```
+Given I see a duplicate warning
+When I click "View Details"
+Then I see a side-by-side comparison
+And overlapping text is highlighted
+And I see the similarity percentage
+```
+
+*Rule-based Criteria*:
+- [ ] Similarity threshold for warning: 85%+
+- [ ] Similarity threshold for info: 70-84%
+- [ ] Check runs on paste, file upload, and URL scrape (before final save)
+- [ ] User can always override and add anyway
+- [ ] Check completes within 2 seconds
+
+**Technical Notes**:
+- Use text similarity algorithm (Jaccard, cosine, or Levenshtein on word tokens)
+- Check against all existing samples for this voice clone
+- Run check server-side during sample creation
+- API response includes `similarity_warning` if threshold exceeded
+- Frontend: Create `DuplicateWarningModal` component
+
+**Dependencies**: US-02-006, US-02-007, US-02-008
+
+**Edge Cases**:
+- Handle very short samples (may have high false positive rate)
+- Handle samples in different formats (normalize whitespace before comparison)
+- Handle partial duplicates (same article, different excerpts)
 
 ---
 
@@ -2061,6 +2287,9 @@ And my input and configuration are preserved
 - Show estimated cost before generation for inputs > 5,000 tokens: "This generation will use approximately X tokens (~$Y)"
 - Warn if input exceeds 5,000 tokens: "Large input detected. Consider breaking into smaller sections for better results."
 - Display token count in real-time as user types input
+- Handle rate limit warnings (show warning but allow proceed) (US-07-013)
+- **Integration**: Check for existing draft on page load (US-07-016)
+- Clear draft from localStorage on successful generation
 
 ---
 
@@ -2611,6 +2840,82 @@ Because templates are independent of voice clones
 
 ---
 
+#### US-04-015: Repurpose Content for Different Platform
+
+**Priority**: P1 | **Points**: 5 | **Sprint**: 5
+
+**User Story**:
+```
+As a content creator,
+I want to quickly create a version of existing content for a different platform,
+So that I can easily cross-post without starting from scratch.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Initiate repurposing from library*
+```
+Given I am viewing a content item in my library
+When I click "Create for [Platform]" dropdown
+Then I see a list of platforms I haven't generated this content for
+When I select a platform (e.g., "Twitter" for existing LinkedIn content)
+Then I am taken to the content creator with the content pre-filled
+```
+
+*Scenario 2: Repurpose configuration*
+```
+Given I initiated repurposing
+Then I see:
+  - Source platform badge (e.g., "From LinkedIn")
+  - Target platform selector (pre-selected from my choice)
+  - Original content displayed (read-only reference)
+  - Voice clone auto-selected (same as original)
+  - Properties panel (can adjust for new platform)
+```
+
+*Scenario 3: Generate repurposed content*
+```
+Given I have configured the repurpose settings
+When I click "Generate"
+Then new content is generated:
+  - Using the same voice clone
+  - Optimized for the target platform
+  - Preserving core message from original
+  - Adapting length/format per platform best practices
+```
+
+*Scenario 4: Link to original*
+```
+Given I generate repurposed content
+Then the new content record shows:
+  - "Repurposed from [original content link]"
+  - Original platform badge
+  - Link to view original content
+```
+
+*Rule-based Criteria*:
+- [ ] Voice clone is automatically selected (same as original)
+- [ ] Properties default to target platform's typical settings
+- [ ] Original content linked in metadata
+- [ ] Can repurpose same content to multiple platforms
+- [ ] Generation prompt includes "adapt this content for [platform]" context
+
+**Technical Notes**:
+- API Endpoint: `POST /api/content/{id}/repurpose`
+- Request body: `{ target_platform: Platform, properties?: ContentProperties }`
+- Backend: Fetch original content, build repurposing prompt
+- Store `repurposed_from_id` foreign key on Content model
+- Frontend: Add dropdown menu in ContentDetail and LibraryListItem
+
+**Dependencies**: US-05-003, US-04-005
+
+**Edge Cases**:
+- Handle repurposing to same platform (show warning "content already exists for this platform")
+- Handle deleted voice clone (prompt to select a different clone)
+- Handle very long content being repurposed to character-limited platform (auto-thread for Twitter)
+
+---
+
 ### 4.5 Epic: Content Library (EP-05)
 
 **Epic Description**: Store, organize, and manage all generated content.
@@ -3048,6 +3353,79 @@ And I am taken to the new item's detail view
 
 **Edge Cases**:
 - Handle duplicating when voice clone no longer exists
+
+---
+
+#### US-05-009: View Content Edit History
+
+**Priority**: P2 | **Points**: 3 | **Sprint**: 6
+
+**User Story**:
+```
+As a content creator,
+I want to view the edit history of content in my library,
+So that I can see previous versions and understand how the content evolved.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View edit history*
+```
+Given I am viewing content details
+When I click "History" tab or icon
+Then I see a list of previous versions:
+  - Version number (most recent first)
+  - Timestamp of change
+  - Change summary (e.g., "Edited content", "Regenerated", "Improved detection score")
+  - AI detection score at that version
+```
+
+*Scenario 2: Compare versions*
+```
+Given I am viewing the edit history
+When I select a previous version
+Then I see the full content of that version
+And I can toggle to side-by-side comparison with current version
+And differences are highlighted
+```
+
+*Scenario 3: Revert to previous version*
+```
+Given I am viewing a previous version
+When I click "Restore this version"
+Then I see a confirmation dialog
+When I confirm
+Then that version becomes the current content
+And a new history entry is created ("Reverted to version X")
+And AI detection score is recalculated
+```
+
+*Scenario 4: History limits*
+```
+Given content has been edited many times
+Then only the last 10 versions are retained
+And older versions are automatically deleted
+```
+
+*Rule-based Criteria*:
+- [ ] Maximum 10 versions retained per content item
+- [ ] Version created on: edit, regenerate, improve, revert
+- [ ] Version includes full content snapshot (not just diff)
+- [ ] History viewable but not editable (immutable records)
+
+**Technical Notes**:
+- New database table: `content_versions`
+  - id, content_id, version_number, content_snapshot, ai_detection_score, change_type, created_at
+- Trigger version creation in PATCH /api/content/{id} endpoint
+- Delete oldest version when 11th is created
+- Frontend: Create `ContentHistory` component (reuse patterns from DNA history)
+
+**Dependencies**: US-05-003, US-04-007
+
+**Edge Cases**:
+- Handle content with no history (only original generation)
+- Handle restoring while another edit is in progress
+- Handle very large content (ensure snapshot doesn't bloat database)
 
 ---
 
@@ -4041,6 +4419,430 @@ Then the onboarding wizard opens again
 
 ---
 
+#### US-07-012: View Usage Warnings
+
+**Priority**: P1 | **Points**: 3 | **Sprint**: 2
+
+**User Story**:
+```
+As a content creator,
+I want to receive warnings when approaching my usage thresholds,
+So that I can manage my AI API spending proactively.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Approaching threshold warning*
+```
+Given I have set a usage warning threshold
+When my usage reaches 80% of the threshold
+Then I see a warning notification (toast)
+And a warning badge appears on the Settings nav item
+And the Usage page shows a yellow warning indicator
+```
+
+*Scenario 2: Exceeding threshold warning*
+```
+Given my usage exceeds 100% of my threshold
+When I use the application
+Then I see a critical notification
+And the notification explains I've exceeded my limit
+And I have options: "Increase Limit" or "Dismiss"
+```
+
+*Scenario 3: Configure warning threshold*
+```
+Given I am on the Settings > Usage page
+When I set a monthly cost threshold (e.g., $20)
+And I click "Save"
+Then the threshold is saved
+And I see confirmation "Threshold set to $20/month"
+```
+
+*Scenario 4: Dismiss warnings*
+```
+Given I see a usage warning
+When I click "Dismiss"
+Then the warning is dismissed for this session
+And it may reappear on next login if still over threshold
+```
+
+*Rule-based Criteria*:
+- [ ] Warning levels: 80% (warning), 100% (critical)
+- [ ] Warnings do NOT block usage (soft limits)
+- [ ] Threshold is optional (no warnings if not set)
+- [ ] Warnings appear as toast and in UI indicators
+- [ ] Notifications persist until dismissed or threshold raised
+
+**Technical Notes**:
+- Store `usage_warning_threshold` in user settings
+- Check threshold on each API call that uses AI
+- Send warning via toast notification system
+- API Endpoint: `PUT /api/settings/usage/threshold`
+- Frontend: Integrate with notification system from US-07-003
+
+**Dependencies**: US-07-009
+
+**Edge Cases**:
+- Handle threshold of $0 (disable warnings)
+- Handle rapid usage that jumps from 50% to 120% in one call
+- Handle timezone differences in monthly reset
+
+---
+
+#### US-07-013: View Rate Limit Status
+
+**Priority**: P1 | **Points**: 2 | **Sprint**: 2
+
+**User Story**:
+```
+As a content creator,
+I want to see my current rate limit status and when limits reset,
+So that I understand if my usage is being throttled.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View rate limit status*
+```
+Given I am on the Settings > Usage page
+When I view the "Rate Limits" section
+Then I see:
+  - Current requests this hour: X / limit
+  - Current generations today: X / limit
+  - Reset time for hourly limit
+  - Reset time for daily limit
+```
+
+*Scenario 2: Approaching rate limit*
+```
+Given I am at 90%+ of a rate limit
+When I try to generate content
+Then I see a warning: "You're approaching your rate limit (X remaining)"
+And the generation proceeds normally
+```
+
+*Scenario 3: At rate limit*
+```
+Given I have reached a rate limit
+When I try to generate content
+Then I see a warning: "Rate limit reached. Please wait until [reset time]"
+And the generation still proceeds (soft limit)
+And the content is queued if necessary
+```
+
+*Rule-based Criteria*:
+- [ ] Rate limits are soft (warn but don't block)
+- [ ] Default limits: 20 generations/hour, 100 generations/day
+- [ ] Limits are per-user, not global
+- [ ] Display remaining requests and reset times
+- [ ] Rate limit headers included in API responses
+
+**Technical Notes**:
+- Track usage in Redis or in-memory cache (fast lookups)
+- Implement sliding window rate limiting
+- Return rate limit info in response headers: X-RateLimit-Remaining, X-RateLimit-Reset
+- Frontend: Display in Settings and optionally in generation UI
+
+**Dependencies**: US-07-009
+
+**Edge Cases**:
+- Handle clock skew in reset times
+- Handle bulk generation requests (count as multiple toward limit)
+- Handle failed generations (still count toward limit)
+
+---
+
+#### US-07-014: Edit User Profile
+
+**Priority**: P1 | **Points**: 2 | **Sprint**: 2
+
+**User Story**:
+```
+As a user,
+I want to edit my display name and profile preferences,
+So that my account reflects my current information.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View profile*
+```
+Given I am authenticated
+When I click my avatar/name in the navigation
+And I select "Profile" or "Settings > Profile"
+Then I see my profile page with:
+  - Profile picture (from OAuth provider)
+  - Display name
+  - Email address (read-only, from OAuth)
+  - Account created date
+  - OAuth provider badge
+```
+
+*Scenario 2: Edit display name*
+```
+Given I am viewing my profile
+When I click "Edit" next to my display name
+Then the field becomes editable
+When I change the name and click "Save"
+Then the display name is updated
+And the new name appears in the navigation
+```
+
+*Scenario 3: Name validation*
+```
+Given I am editing my display name
+When I enter an invalid name (empty, >100 chars, or offensive)
+Then I see a validation error
+And the save is prevented
+```
+
+*Rule-based Criteria*:
+- [ ] Display name: 1-100 characters, no slurs/offensive terms
+- [ ] Email is read-only (tied to OAuth)
+- [ ] Profile picture comes from OAuth provider (not editable in V1)
+- [ ] Changes saved immediately (no confirmation needed)
+
+**Technical Notes**:
+- API Endpoint: `GET /api/user/profile`
+- API Endpoint: `PATCH /api/user/profile`
+- Request body: `{ display_name?: string }`
+- Frontend: Create `UserProfile` component
+
+**Dependencies**: US-07-007
+
+**Edge Cases**:
+- Handle name with special characters (allow, sanitize for display)
+- Handle concurrent profile updates
+
+---
+
+#### US-07-015: View Background Job Status
+
+**Priority**: P1 | **Points**: 3 | **Sprint**: 3
+
+**User Story**:
+```
+As a content creator,
+I want to see the status of any long-running operations (like DNA analysis),
+So that I can track progress and retry if needed.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: View active jobs*
+```
+Given I have a long-running job in progress (e.g., DNA analysis)
+When I view the jobs indicator in the navigation
+Then I see a badge with the count of active jobs
+When I click the badge
+Then I see a dropdown/panel showing:
+  - Job type (e.g., "Voice DNA Analysis")
+  - Voice clone name
+  - Progress indicator (if available)
+  - Started time
+  - Estimated time remaining (if available)
+```
+
+*Scenario 2: View completed jobs*
+```
+Given I have recently completed jobs
+When I view the jobs panel
+Then I see recent completed jobs (last 24 hours):
+  - Job type
+  - Status (completed/failed)
+  - Completion time
+  - Link to result (e.g., voice clone detail page)
+```
+
+*Scenario 3: Failed job*
+```
+Given a job has failed
+When I view the jobs panel
+Then I see the failed job with:
+  - Error message summary
+  - "Retry" button
+  - "Dismiss" option
+```
+
+*Scenario 4: Retry failed job*
+```
+Given I see a failed job
+When I click "Retry"
+Then the job is restarted
+And I see it move back to "in progress" status
+```
+
+*Rule-based Criteria*:
+- [ ] Jobs tracked: DNA analysis, content generation (if queued), bulk operations
+- [ ] Active jobs show real-time progress (polling or WebSocket)
+- [ ] Completed jobs retained for 24 hours
+- [ ] Failed jobs retained until dismissed or retried
+- [ ] Maximum 10 recent jobs displayed
+
+**Technical Notes**:
+- API Endpoint: `GET /api/jobs`
+- Returns: `{ active: Job[], recent: Job[] }`
+- Job model: id, type, status, progress, voice_clone_id, error_message, created_at, completed_at
+- Consider using background job library (e.g., Celery, ARQ) with status tracking
+- Frontend: Create `JobsPanel` component in navigation
+
+**Dependencies**: US-02-011, US-04-005
+
+**Edge Cases**:
+- Handle job that's been running too long (show "taking longer than expected")
+- Handle many concurrent jobs (queue management)
+- Handle user navigating away during job (job continues, status updates on return)
+
+---
+
+#### US-07-016: Draft Auto-Recovery
+
+**Priority**: P1 | **Points**: 3 | **Sprint**: 3
+
+**User Story**:
+```
+As a content creator,
+I want my unsaved content drafts to be recovered if the browser crashes,
+So that I don't lose work unexpectedly.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: Auto-save draft*
+```
+Given I am on the content creation page
+When I enter content in the input area
+And 30 seconds pass
+Then the draft is automatically saved to localStorage
+And I see a subtle "Draft saved" indicator
+```
+
+*Scenario 2: Recover draft on page load*
+```
+Given I have an unsaved draft from a previous session
+When I navigate to the content creation page
+Then I see a recovery prompt: "We found an unsaved draft. Would you like to restore it?"
+And I see options: "Restore Draft" or "Discard"
+```
+
+*Scenario 3: Restore draft*
+```
+Given I see the recovery prompt
+When I click "Restore Draft"
+Then the draft is loaded into the content creator
+And the voice clone is restored (if available)
+And the properties are restored
+And the draft is cleared from storage
+```
+
+*Scenario 4: Discard draft*
+```
+Given I see the recovery prompt
+When I click "Discard"
+Then the draft is deleted from localStorage
+And I start with a fresh content creator
+```
+
+*Scenario 5: Clear draft on success*
+```
+Given I have a draft saved
+When I successfully generate content
+Then the draft is automatically cleared from localStorage
+```
+
+*Rule-based Criteria*:
+- [ ] Auto-save every 30 seconds while typing
+- [ ] Draft includes: input content, voice clone ID, properties, platform selections
+- [ ] Draft stored in localStorage (client-side)
+- [ ] Only one draft per user (overwrite previous)
+- [ ] Draft timestamp displayed in recovery prompt
+
+**Technical Notes**:
+- Use localStorage with key: `voice_clone_draft_{user_id}`
+- Store: `{ input, voice_clone_id, properties, platforms, timestamp }`
+- Check for draft on component mount
+- Clear draft on successful generation or explicit discard
+- Frontend: Create `DraftRecovery` component
+
+**Dependencies**: US-04-002, US-04-003, US-04-004
+
+**Edge Cases**:
+- Handle draft with deleted voice clone (prompt to select new one)
+- Handle localStorage being full (show error, don't crash)
+- Handle draft older than 7 days (auto-expire with warning)
+
+---
+
+#### US-07-017: View System Status
+
+**Priority**: P2 | **Points**: 2 | **Sprint**: 6
+
+**User Story**:
+```
+As a user,
+I want to see if any services are experiencing issues,
+So that I understand if problems are on my end or the system's.
+```
+
+**Acceptance Criteria**:
+
+*Scenario 1: All systems operational*
+```
+Given all services are healthy
+When I view the status indicator (in navigation footer)
+Then I see a green dot/icon indicating "All systems operational"
+```
+
+*Scenario 2: Service degradation*
+```
+Given one or more services are experiencing issues
+When I view the status indicator
+Then I see a yellow or red indicator
+And I can click to see which service is affected
+```
+
+*Scenario 3: View status details*
+```
+Given I click the status indicator
+Then I see a status popup/page showing:
+  - API status: Operational/Degraded/Down
+  - Database status: Operational/Degraded/Down
+  - OpenAI status: Operational/Degraded/Down
+  - Anthropic status: Operational/Degraded/Down
+  - Last checked timestamp
+```
+
+*Scenario 4: AI provider issues*
+```
+Given an AI provider is experiencing issues
+When I try to generate content
+Then I see a message explaining the issue
+And I can switch to an alternative provider (if configured)
+```
+
+*Rule-based Criteria*:
+- [ ] Status checked every 5 minutes (backend)
+- [ ] User can manually refresh status
+- [ ] External provider status fetched via their status APIs
+- [ ] Status indicator always visible (non-intrusive)
+
+**Technical Notes**:
+- Extend health check endpoint: `GET /health?detailed=true`
+- Check AI provider status via their status pages/APIs
+- Cache status for 5 minutes
+- Frontend: Small status indicator in navigation footer
+- Consider dedicated `/status` page for detailed view
+
+**Dependencies**: US-07-006
+
+**Edge Cases**:
+- Handle inability to check external provider status (show "Unknown")
+- Handle partial outages (some operations work, others don't)
+- Handle false positives (brief blips shouldn't show as down)
+
+---
+
 ## 5. Story Dependencies Diagram
 
 ```
@@ -4057,6 +4859,9 @@ EP-02: Voice Clone Generator
   US-01-001 ────────────────────────────────→ US-02-011 → US-02-012 → US-02-013, US-02-014
                                                         ↓
   US-02-012, US-02-003 ──────────────────────────────→ US-02-016 (Compare Clones)
+  US-02-011, US-02-010 ──────────────────────────────→ US-02-017 (Health Score)
+  US-02-011, US-02-012 ──────────────────────────────→ US-02-018 (Sample Impact)
+  US-02-006, US-02-007, US-02-008 ───────────────────→ US-02-019 (Duplicate Detection)
 
 EP-03: Voice Clone Merger
   US-02-011 → US-03-001 → US-03-002 → US-03-003 → US-03-004, US-03-005
@@ -4068,10 +4873,12 @@ EP-04: Content Creator
   US-04-006 ← US-04-005 → US-04-007, US-04-008 → US-04-009
   US-04-010 ← US-04-006
   US-04-011, US-04-012 ← US-04-005
+  US-05-003, US-04-005 ──────────────────────────────→ US-04-015 (Repurpose Content)
 
 EP-05: Content Library
   US-04-012 → US-05-001 → US-05-002, US-05-003 → US-05-004, US-05-005, US-05-007, US-05-008
                                                → US-05-006
+  US-05-003, US-04-007 ──────────────────────────────→ US-05-009 (Content History)
 
 EP-06: Platform Output
   US-04-005 → US-06-001, US-06-002
@@ -4084,6 +4891,11 @@ EP-07: System & Infrastructure
   US-07-007 (OAuth) → US-07-008 (AI Provider) → US-07-009 (Usage Tracking)
   US-02-003 → US-07-010 (Export Voice Clone)
   US-07-007, US-07-001 → US-07-011 (Onboarding)
+  US-07-009 → US-07-012 (Usage Warnings), US-07-013 (Rate Limits)
+  US-07-007 → US-07-014 (Edit Profile)
+  US-02-011, US-04-005 → US-07-015 (Background Jobs)
+  US-04-002, US-04-003, US-04-004 → US-07-016 (Draft Recovery)
+  US-07-006 → US-07-017 (System Status)
 ```
 
 ---
@@ -4111,6 +4923,9 @@ EP-07: System & Infrastructure
 - US-07-002: Settings Dashboard
 - US-07-003: Error Handling and Notifications
 - US-07-009: View AI Usage and Costs *(NEW)*
+- US-07-012: View Usage Warnings *(NEW - Gap Analysis)*
+- US-07-013: View Rate Limit Status *(NEW - Gap Analysis)*
+- US-07-014: Edit User Profile *(NEW - Gap Analysis)*
 - US-01-003: View and Revert Instruction History
 - US-01-006: Manage Platform Best Practices
 - US-02-006: Add Writing Sample via Paste
@@ -4122,6 +4937,8 @@ EP-07: System & Infrastructure
 ### Sprint 3: Voice DNA & Content Creation
 - US-02-011: Trigger Voice DNA Analysis
 - US-02-012: View Voice DNA
+- US-07-015: View Background Job Status *(NEW - Gap Analysis)*
+- US-07-016: Draft Auto-Recovery *(NEW - Gap Analysis)*
 - US-04-001: Select Voice Clone for Content Creation
 - US-04-002: Enter Content Input
 - US-04-003: Configure Content Properties
@@ -4134,6 +4951,7 @@ EP-07: System & Infrastructure
 - US-02-013: Edit Voice DNA Manually
 - US-02-014: View and Revert DNA History
 - US-02-016: Compare Voice Clones Side-by-Side *(NEW)*
+- US-02-017: View Voice Clone Health Score *(NEW - Gap Analysis)*
 - US-03-001: Select Clones to Merge
 - US-03-002: Configure Element Weights
 - US-03-003: Create Merged Voice Clone
@@ -4152,7 +4970,10 @@ EP-07: System & Infrastructure
 - US-03-004: View Merged Clone Sources
 - US-03-005: Regenerate Merged DNA
 - US-02-015: Upload Voice Clone Avatar
+- US-02-018: View Sample Impact Analysis *(NEW - Gap Analysis)*
+- US-02-019: Detect Duplicate Samples *(NEW - Gap Analysis)*
 - US-04-014: Content Templates *(NEW)*
+- US-04-015: Repurpose Content for Different Platform *(NEW - Gap Analysis)*
 - US-07-010: Export Voice Clone Data *(NEW)*
 - US-05-001: View Content Library
 - US-05-002: Filter Content Library
@@ -4165,7 +4986,9 @@ EP-07: System & Infrastructure
 
 ### Sprint 6: Final Features
 - US-05-006: Bulk Actions on Content
+- US-05-009: View Content Edit History *(NEW - Gap Analysis)*
 - US-07-011: First-Run Onboarding *(NEW - Optional)*
+- US-07-017: View System Status *(NEW - Gap Analysis)*
 
 ---
 
@@ -4190,6 +5013,7 @@ EP-07: System & Infrastructure
 |---------|------|--------|---------|
 | 1.0 | 2026-02-04 | Claude + Ken | Initial user stories document |
 | 1.1 | 2026-02-04 | Claude + Ken | Added 8 new user stories: OAuth Auth (US-07-007), AI Provider Settings (US-07-008), Usage Tracking (US-07-009), Export Data (US-07-010), Onboarding (US-07-011), Clone Comparison (US-02-016), A/B Variations (US-04-013), Content Templates (US-04-014). Added edge cases to US-02-008, US-04-005, US-02-011. Updated sprint planning. Total stories: 57 → 65. |
+| 1.2 | 2026-02-04 | Claude + Ken | Gap Analysis additions: Added 11 new user stories addressing identified gaps. **EP-02**: US-02-017 (Health Score), US-02-018 (Sample Impact), US-02-019 (Duplicate Detection). **EP-04**: US-04-015 (Content Repurposing). **EP-05**: US-05-009 (Content History). **EP-07**: US-07-012 (Usage Warnings), US-07-013 (Rate Limits), US-07-014 (Edit Profile), US-07-015 (Background Jobs), US-07-016 (Draft Recovery), US-07-017 (System Status). Updated existing stories US-02-010, US-02-011, US-04-005 with integration notes. Updated dependencies diagram and sprint planning. Total stories: 65 → 76. |
 
 ---
 
