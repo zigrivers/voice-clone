@@ -11,12 +11,24 @@ const customJestConfig = {
   testEnvironment: "jest-environment-jsdom",
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
+    // MSW and interceptors module mappings
+    "^msw/node$": "<rootDir>/node_modules/msw/lib/node/index.js",
+    "^msw$": "<rootDir>/node_modules/msw/lib/core/index.js",
+    "^@mswjs/interceptors/ClientRequest$": "<rootDir>/node_modules/@mswjs/interceptors/lib/node/interceptors/ClientRequest/index.cjs",
+    "^@mswjs/interceptors/XMLHttpRequest$": "<rootDir>/node_modules/@mswjs/interceptors/lib/node/interceptors/XMLHttpRequest/index.cjs",
+    "^@mswjs/interceptors/fetch$": "<rootDir>/node_modules/@mswjs/interceptors/lib/node/interceptors/fetch/index.cjs",
+    "^@mswjs/interceptors/presets/node$": "<rootDir>/node_modules/@mswjs/interceptors/lib/node/presets/node.cjs",
+    "^@mswjs/interceptors$": "<rootDir>/node_modules/@mswjs/interceptors/lib/node/index.cjs",
   },
   testPathIgnorePatterns: ["<rootDir>/node_modules/", "<rootDir>/.next/"],
   collectCoverageFrom: [
     "src/**/*.{js,jsx,ts,tsx}",
     "!src/**/*.d.ts",
     "!src/**/*.stories.{js,jsx,ts,tsx}",
+  ],
+  // MSW needs special handling for ESM modules
+  transformIgnorePatterns: [
+    "/node_modules/(?!(msw|@bundled-es-modules)/)",
   ],
 };
 
