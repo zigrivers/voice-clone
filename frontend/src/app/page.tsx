@@ -24,7 +24,7 @@ export default function HomePage() {
             <Link href="/voice-clones">Get Started</Link>
           </Button>
           <Button variant="outline" asChild size="lg">
-            <Link href="/docs">Learn More</Link>
+            <Link href="/auth/signin">Sign In</Link>
           </Button>
         </div>
       </div>
