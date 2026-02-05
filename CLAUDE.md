@@ -141,6 +141,61 @@ See `docs/parallel-sessions-quickref.md` for a complete quick reference.
 - Point at logs, errors, failing tests → then resolve them
 - Go fix failing CI tests without being told how
 
+## Testing & TDD
+
+**Critical**: Follow the TDD standards defined in `docs/tdd-standards.md`.
+
+### Test-Driven Generation (TDG) Workflow
+
+Follow the RED-GREEN-REFACTOR cycle strictly:
+
+1. **RED**: Write test first (test must fail)
+2. **GREEN**: Implement just enough to pass the test
+3. **REFACTOR**: Improve code while keeping tests passing
+
+### TDD Rules for AI
+
+| Rule | Rationale |
+|------|-----------|
+| **Test First, Always** | Write the test before implementing. No exceptions. |
+| **Never generate test AND implementation together** | AI tests will pass its own bugs |
+| **Run tests after every AI interaction** | Verify AI understood correctly |
+| **One logical change per cycle** | Keeps AI focused, prevents confusion |
+
+### Test Commands
+
+```bash
+# Backend
+cd backend
+uv run pytest tests/ -v                    # Run all tests
+uv run pytest tests/test_file.py -v        # Run single file
+uv run pytest --cov=voice_clone            # Run with coverage
+
+# Frontend
+cd frontend
+npm test                                   # Run all tests
+npm test -- --run tests/file.test.tsx     # Run single file
+npm test -- --coverage                    # Run with coverage
+```
+
+### Coverage Requirements
+
+| Code Area | Minimum | Target |
+|-----------|---------|--------|
+| Services (business logic) | 85% | 90% |
+| API Routes | 75% | 80% |
+| Utilities | 90% | 95% |
+| React Hooks | 80% | 90% |
+| React Components | 60% | 75% |
+
+### Verification Checkpoint
+
+Before marking any task complete:
+- [ ] All related tests pass
+- [ ] New code has tests
+- [ ] Coverage meets minimums
+- [ ] No test skips or failures
+
 ## Task Management
 
 Track work in `tasks/` folder (both files are git-tracked for cross-session continuity):
