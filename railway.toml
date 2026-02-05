@@ -1,0 +1,26 @@
+# Railway Deployment Configuration
+# https://docs.railway.app/reference/config-as-code
+
+[build]
+builder = "NIXPACKS"
+buildCommand = "cd backend && pip install uv && uv sync --frozen --no-dev && python -m spacy download en_core_web_sm"
+
+[deploy]
+startCommand = "cd backend && uvicorn voice_clone.main:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[deploy.healthcheck]
+path = "/health"
+timeout = 100
+
+# Environment variables (set via Railway dashboard)
+# DATABASE_URL - PostgreSQL connection string
+# OPENAI_API_KEY - OpenAI API key (optional)
+# ANTHROPIC_API_KEY - Anthropic API key (optional)
+# ENCRYPTION_KEY - For API key encryption
+# AUTH_SECRET - NextAuth secret
+# GOOGLE_CLIENT_ID - OAuth (optional)
+# GOOGLE_CLIENT_SECRET - OAuth (optional)

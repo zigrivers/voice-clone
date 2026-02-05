@@ -191,3 +191,72 @@ export function useDeletePlatformSettings() {
     },
   })
 }
+
+// API Keys query keys
+export const apiKeysKeys = {
+  all: ["apiKeys"] as const,
+  list: () => [...apiKeysKeys.all, "list"] as const,
+}
+
+// Get all API keys
+export function useApiKeys() {
+  return useQuery({
+    queryKey: apiKeysKeys.list(),
+    queryFn: async () => {
+      const { data } = await api.get<{ items: import("@/types").ApiKey[] }>(
+        "/api-keys"
+      )
+      return data.items
+    },
+  })
+}
+
+// Add API key
+export function useAddApiKey() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: import("@/types").ApiKeyCreate) => {
+      const response = await api.post<import("@/types").ApiKey>(
+        "/api-keys",
+        data
+      )
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: apiKeysKeys.list() })
+    },
+  })
+}
+
+// Validate API key
+export function useValidateApiKey() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (keyId: string) => {
+      const response = await api.post<{ is_valid: boolean }>(
+        `/api-keys/${keyId}/validate`
+      )
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: apiKeysKeys.list() })
+    },
+  })
+}
+
+// Delete API key
+export function useDeleteApiKey() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (keyId: string) => {
+      await api.delete(`/api-keys/${keyId}`)
+      return keyId
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: apiKeysKeys.list() })
+    },
+  })
+}
